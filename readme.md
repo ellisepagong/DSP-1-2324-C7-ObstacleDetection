@@ -8,14 +8,15 @@ The resulting coordinates and classifications of the obstacle detection model wi
 
 ## Dependencies and Installation
 
-This project uses the following libraries<br>
-
+This project uses the following libraries and tools:<br>
 - conda 23.7.4 (for installation)
-- pipwin (for python installations)
+- OpenCV
 - Python 3.8 
 - PyTorch 1.8
 - Ultralytics
 - Numpy
+- CUDA (for training)
+- scikit-learn (for training)
 
 ### Installation Guide (Using Anaconda)
 
@@ -38,10 +39,11 @@ conda activate <env>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; after which your interface should look like this:<br><br>
 ![guide_activateEnv.png](embeds/guide_activateEnv.png)<br><br>
 
-5. All remaining libraries with be installed as Ultralytics' dependencies. Install Ultralytics with the following command:
+5. All remaining libraries with be installed as Ultralytics' dependencies. Install PyTorch, CUDA, scikit-learn and Ultralytics with the following command:
 ```
-pip install ultralytics 
+conda install -c pytorch -c nvidia -c conda-forge pytorch torchvision pytorch-cuda=11.8 ultralytics scikit-learn
 ```
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; You will be prompted to install additional libraries again. Ensure that the libraries mentioned at the start of this guide are included.<br>
 
 ---
 
@@ -51,16 +53,15 @@ Once you have cloned this repository, enter Ctrl+Shift+P while in the code edito
 ![guide_vscCommand.png](embeds/guide_vscCommand.png)<br><br>
 Select Python: Select Interpreter then select your conda environment. Again, the environment used in the screenshot is `thscenv` <br><br>
 ![guide_vscInterpreter.png](embeds/guide_vscInterpreter.png)<br><br>
-The model can now be run in VSCode. **Happy Coding!**<br><br><br><br>
+### The model can now be run in VSCode. **Happy Coding!**<br><br><br><br>
 
 ## Setting up Conda environment with PyCharm
 
-Once you have cloned this repository, Open Settings (Ctrl+Alt+S or File→Settings) in PyCharm<br>
-Go to Project→Python Interpreter<br><br>
+Once you have cloned this repository, Open Settings (Ctrl+Alt+S or File → Settings) in PyCharm<br>
+Go to Project → Python Interpreter<br><br>
 ![guide_pycharmSettings.png](embeds/guide_pycharmSettings.png)<br><br>
 Click Add Interpreter<br>
-Select Conda Environment→Use Existing Environment<br>
+Select Conda Environment → Use Existing Environment<br>
 Select your conda environment. Again, the environment used in the screenshot is `thscenv`<br><br>
 ![guide_pycharmInterpreter.png](embeds/guide_pycharmInterpreter.png)<br><br>
-The model can now be run in PyCharm. **Happy Coding!**<br><br><br><br>
-
+### The model can now be run in PyCharm. **Happy Coding!**
