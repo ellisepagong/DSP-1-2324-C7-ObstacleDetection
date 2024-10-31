@@ -15,12 +15,11 @@ upper = DoubleVar() # upper boundary of x coordinate
 upper = 200
 present.set(False)
 
-# arduino = serial.Serial(port='COM8',  baudrate=115200, timeout=.1)
+arduino = serial.Serial(port='COM8',  baudrate=115200, timeout=.1)
 
-# def write_read(x): # Initialize Arduino
-#     arduino.write(bytes(x,  'utf-8'))
-#     time.sleep(0.05)
-
+def write_read(x): # Initialize Arduino
+    arduino.write(bytes(x,  'utf-8'))
+    time.sleep(0.05)
 
 def getBin(x, high_boundary=upper): # encode x coordinate to binary
     segment_size = (high_boundary) // 5
@@ -46,8 +45,7 @@ def ardSend(): # send data to arduino
 
     # encode data before sending to arduino  
     out = getBin(int(valOutput.get()))
-    # write_read(out) # Send to arduino
-
+    write_read(out) # Send to arduino
     print("Current value: ", valOutput.get()," Current binary: ", out)
     root.after(500, ardSend)  # Repeat every 500 ms
 
