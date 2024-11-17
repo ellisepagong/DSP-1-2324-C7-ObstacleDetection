@@ -1,11 +1,6 @@
 #documentation: https://www.ultralytics.com/blog/object-detection-with-a-pre-trained-ultralytics-yolov8-model
 
-#todo
-#   dataLoader class for custom dataset
-#   model class for trained model (maybe, merge with train class)
-#   trainer class for transfer learning/retraining
-#   predictor class for prediction and evaluation
-
+# Code to test trained YOLO models
 
 from ultralytics import YOLO
 import cv2, torch
@@ -13,21 +8,21 @@ import cv2, torch
 def main():
     torch.cuda.set_device(0)  #use gpu
 
-    model = YOLO('yolov8n.pt') #load pretrained dataset
-    videoStream = cv2.VideoCapture(1) # camera feed
+    model = YOLO('model.pt') #load pretrained dataset
+    video_stream = cv2.VideoCapture(1) # camera feed
 
-    if not videoStream.isOpened():
+    if not video_stream.isOpened():
         print('Error in camera')
         exit(0)
 
     while True:
-        ret, img = videoStream.read()
+        ret, img = video_stream.read()
         if not ret:
             print("Failed to grab frame")
             break
 
         # Perform inference on the current frame
-        results = model(source=img, show=True, conf=0.4, save=True)  # Predict using the model
+        results = model(source=img, show=True, conf=0.4, save=False)  # Predict using the model
 
         # classes returns as integers instead of class names; remove save=True from above to use this
         # for result in results:
@@ -49,7 +44,7 @@ def main():
             break
 
     # Release the video stream and close windows
-    videoStream.release()
+    video_stream.release()
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
