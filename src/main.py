@@ -24,7 +24,7 @@ def main():
     # video_stream = cv2.VideoCapture(1) # camera feed
     video_stream = cv2.VideoCapture("testvid.mp4") # video
 
-    max_width = 640                                                                                                                          # video pixel width
+    max_width = 640  # for testing videos, should be 1920 assuming 1080p camera feed                                                                                                                        # video pixel width
     seg_size = max_width / 5
 
     model = YOLO('model.pt')
@@ -61,10 +61,10 @@ def main():
                     segment_index = 0
                 elif segment_index >= 5:
                     segment_index = 4
-                duty_cycle1 = int((segment_index / 4) * 100)                                                                                  # PWM for x coordinate
+                duty_cycle1 = int((segment_index / 4) * 100)                                                                                  # PWM for x coordinate, send through PWM pin
                 print(f"The object in segment: {segment_index} is sent as duty cycle {duty_cycle1}%")
 
-                duty_cycle2 = int((cls / 9) * 100)                                                                                            # PWM for class
+                duty_cycle2 = int((cls / 9) * 100)                                                                                            # PWM for class, send through PWM pin
                 print(f"Sending class {classes_dict[int(cls)]} of value {cls} as duty cycle {duty_cycle2}%")
 
                 # END LOGIC FOR RASPBERRY PI
