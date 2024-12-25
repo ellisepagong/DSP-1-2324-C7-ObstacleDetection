@@ -6,6 +6,9 @@
 
 from ultralytics import YOLO
 import cv2, torch
+import serial
+
+arduino = serial.Serial(port='COM5',  baudrate=9600, timeout=1)
 
 classes_dict = {
     0: 'animal',
@@ -21,8 +24,9 @@ classes_dict = {
 }
 def send_to_arduino(cls, segment_index):
     message = f"{cls},{segment_index}\n"  # Format the data as "cls,segment_index"
-    # arduino.write(message.encode())       # Send as bytes
-    print(f"Sent: {message.strip()}")     # Log the sent message
+    message = f"{segment_index}\n"  # Format the data as "cls,segment_index"
+    arduino.write(message.encode())       # Send as bytes
+    print(f"Sent: {message}")     # Log the sent message
 
 def display_pred(img, box, conf, cls):  # displays bounding box
     x1, y1, x2, y2 = box
