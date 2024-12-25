@@ -24,7 +24,7 @@ classes_dict = {
 }
 def send_to_arduino(cls, segment_index):
     message = f"{cls},{segment_index}\n"  # Format the data as "cls,segment_index"
-    message = f"{segment_index}\n"  # Format the data as "cls,segment_index"
+    # message = f"{segment_index}\n"  # Format the data as "cls,segment_index"
     arduino.write(message.encode())       # Send as bytes
     print(f"Sent: {message}")     # Log the sent message
 
