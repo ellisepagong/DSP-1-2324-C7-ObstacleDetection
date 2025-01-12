@@ -4,14 +4,11 @@
 # This is assuming the largest object is the closest as indicated by TOF sensor
 # Additional logic will be used once TOF output is confirmed
 
-# TODO: Add Bluetooth functionality
-# TODO: Add logic for TOF + Raspi Output
-
 from ultralytics import YOLO
 import cv2, torch
 import serial
 
-# arduino = serial.Serial(port='COM5',  baudrate=9600, timeout=1)                                                         # Starts connection with Arduino
+arduino = serial.Serial(port='COM5',  baudrate=9600, timeout=1)                                                         # Starts connection with Arduino
 
 classes_dict = {
     0: 'animal',
@@ -35,8 +32,8 @@ def send_to_arduino(largest_boxes):
         for data in largest_boxes.values()
     ]
     message = ",".join(map(str, classes_message)) + "\n"                                                                # Join the list into a single string separated by commas
-    # arduino.write(message.encode())                                                                                   # Send the complete message to Arduino
-    print(f"Sent: {message.strip()}")                                                                                   # Log the sent message
+    arduino.write(message.encode())                                                                                     # Send the complete message to Arduino
+    # print(f"Sent: {message.strip()}")                                                                                   # Log the sent message
 
 def display_pred(img, largest_box):                                                                                     # displays bounding box
     for data in largest_box.values():
