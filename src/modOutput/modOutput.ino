@@ -238,9 +238,30 @@ void loop() {
       // Append the scores string to the existing string
       message += ",";       // Add a comma to separate from the existing string
       message += scoresString;  // Append the scores string
-      message += "\n"; // append new line
+//       message += "\n"; // append new line
       hc05.println(message);// Send the message to HC-05
     }
   }
+
+    if (hc05.available()) {
+        String receivedData = hc05.readString();  // Read full message
+        receivedData.trim();  // Remove trailing newline or spaces
+        if (receivedData == "motors") {
+          for (int i = 0; i< 3;i++){ // repeat 3 times
+            for (int i = 0; i < 6; i++) {
+              pinMode(motorPins[i], OUTPUT);
+              digitalWrite(motorPins[i], HIGH);  
+            }
+            delay(500)
+            for (int i = 0; i < 6; i++) {
+              pinMode(motorPins[i], OUTPUT);
+              digitalWrite(motorPins[i], LOW);  
+            }
+            delay(500)
+          }
+        }
+    }
+
+
 }
 
