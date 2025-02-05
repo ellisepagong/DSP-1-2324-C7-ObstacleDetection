@@ -36,7 +36,7 @@ int* getWeights(int classes[5], int distance[3]) {
   if (scores == NULL) {  // Always check if malloc was successful
       return NULL; // If memory allocation fails, return NULL
   }
-  int current
+  int current;
   int dis;
   int base_w;
   int dis_w;
@@ -178,7 +178,7 @@ void loop() {
     class_byte.trim();
     int classes[5];
     int idx_class = 0;
-    int spaceIndex_class = input.indexOf(' ');
+    int spaceIndex_class = class_byte.indexOf(' ');
 
     // Store string values into classes array
     while (spaceIndex_class >= 0) {
@@ -193,7 +193,7 @@ void loop() {
       dis_byte.trim();
       int dis[3];
       int idx_dis = 0;
-      int spaceIndex_dis = input.indexOf(' ');
+      int spaceIndex_dis = dis_byte.indexOf(' ');
 
       // Store string values into dis array
       while (spaceIndex_dis >= 0) {
@@ -204,7 +204,11 @@ void loop() {
       }
 
       // get class scores
-      int scores[5] = getWeights(classes, dis)
+      int* scores = getWeights(classes, dis);
+      if (scores == NULL) { // Ensure malloc didn't fail
+          Serial.println("Memory allocation failed.");
+          return;
+      }
 
       // get highest score
       int maxScore = 0;
@@ -252,16 +256,13 @@ void loop() {
               pinMode(motorPins[i], OUTPUT);
               digitalWrite(motorPins[i], HIGH);  
             }
-            delay(500)
+            delay(500);
             for (int i = 0; i < 6; i++) {
               pinMode(motorPins[i], OUTPUT);
               digitalWrite(motorPins[i], LOW);  
             }
-            delay(500)
+            delay(500);
           }
         }
     }
-
-
 }
-
