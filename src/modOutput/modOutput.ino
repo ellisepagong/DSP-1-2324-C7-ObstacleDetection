@@ -184,7 +184,7 @@ void loop() {
     while (spaceIndex_class >= 0) {
       String classStr = class_byte.substring(0, spaceIndex_class);  
       classes[idx_class++] = classStr.toInt();                  
-      input = class_byte.substring(spaceIndex_class + 1);            
+      class_byte = class_byte.substring(spaceIndex_class + 1);            
       spaceIndex_class = class_byte.indexOf(' ');                    
     }
 
@@ -199,12 +199,12 @@ void loop() {
       while (spaceIndex_dis >= 0) {
         String disStr = dis_byte.substring(0, spaceIndex_dis);  
         dis[idx_dis++] = disStr.toInt();                  
-        input = dis_byte.substring(spaceIndex_dis + 1);            
+        dis_byte = dis_byte.substring(spaceIndex_dis + 1);            
         spaceIndex_dis = dis_byte.indexOf(' ');                    
       }
 
       // get class scores
-      scores = getWeights(classes, dis)
+      int scores[5] = getWeights(classes, dis)
 
       // get highest score
       int maxScore = 0;
@@ -244,7 +244,7 @@ void loop() {
   }
 
     if (hc05.available()) {
-        String receivedData = hc05.readString();  // Read full message
+        String receivedData = hc05.readStringUntil('\n');  // Read full message
         receivedData.trim();  // Remove trailing newline or spaces
         if (receivedData == "motors") {
           for (int i = 0; i< 3;i++){ // repeat 3 times
