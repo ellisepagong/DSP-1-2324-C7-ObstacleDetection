@@ -31,6 +31,49 @@ const int weights[] = {
     5  // vehicle
 };
 
+bool handshakeComplete = false;
+
+// --- Handshake Procedure ---
+// This function now flushes any stray data from the CMOS serial buffer
+// before waiting (with a small delay per loop iteration) for the handshake.
+void handshakeProcedure() {
+  Serial.println(F("[HANDSHAKE] Waiting for handshake from ToF module..."));
+  
+  // Flush any stray data in the CMOS serial buffer
+  while (cmos.available()) {
+    char flushed = cmos.read();
+    Serial.print(F("[HANDSHAKE] Flushed stray byte: "));
+    Serial.println(flushed);
+  }
+  
+  unsigned long startTime = millis();
+  bool handshakeReceived = false;
+  
+  while ((millis() - startTime < 10000) && !handshakeReceived) {
+    if (cmos.available() > 0) {
+      String incoming = cmos.readStringUntil('\n');
+      incoming.trim();
+      Serial.print(F("[HANDSHAKE] Received: "));
+      Serial.println(incoming);
+      if (incoming.equals("HELLO_TOF")) {
+         cmos.println("HELLO_OUTPUT");
+         Serial.println(F("[HANDSHAKE] Sent: HELLO_OUTPUT"));
+         handshakeReceived = true;
+         handshakeComplete = true;
+      }
+      else {
+         Serial.println(F("[HANDSHAKE] Received unknown message."));
+      }
+    }
+    delay(50); // Give a little time for more data to arrive
+  }
+  
+  if (!handshakeReceived) {
+    Serial.println(F("[HANDSHAKE] No handshake received within timeout."));
+  }
+}
+
+// --- Other Procedures ---
 int* getWeights(int classes[5], int distance[3]) {
   int* scores = malloc(5 * sizeof(int)); // Dynamically allocate memory for the scores array
   if (scores == NULL) {  // Always check if malloc was successful
@@ -157,11 +200,11 @@ int areAllScoresZero(int scores[5]) {
 
 
 void setup() { // Turn off all motors 
+  // --- Setup Procedure ---
   for (int i = 0; i < 6; i++) {
     pinMode(motorPins[i], OUTPUT);
     digitalWrite(motorPins[i], LOW);  
   }
-
   // Start serial communication at 9600 baud
   hc05.begin(9600);
   cmos.begin(9600);
@@ -169,10 +212,39 @@ void setup() { // Turn off all motors
   while (!Serial) {
     ; 
   }
+  // --- ToF Handshake Procedure ---
+  Serial.println(F("[PROCESS] Starting Output Module Initialization (Uno)..."));
+    
+    // Handshake with the ToF module (running on the Mega)
+    while (!handshakeComplete) {
+      handshakeProcedure();
+      if (!handshakeComplete) {
+        Serial.println(F("[HANDSHAKE] Retrying handshake in 1 second..."));
+        delay(1000);
+      }
+    }
+    Serial.println(F("[HANDSHAKE] Handshake complete. Starting main loop."));
 }
 
 
 void loop() {
+
+  // --- ToF Handshake Procedure ---
+  // Check for incoming data from the ToF module.
+  if (cmos.available()) {
+    String sensorData = cmos.readStringUntil('\n');
+    sensorData.trim();
+    Serial.print(F("[SENSOR DATA RECEIVED] "));
+    Serial.println(sensorData);
+  }
+
+  // Detect disconnection and restart handshake if needed.
+  if (!handshakeComplete) {
+    Serial.println(F("[HANDSHAKE] Lost connection! Restarting handshake..."));
+    handshakeProcedure();
+    delay(1000);
+  }
+
   if (Serial.available() > 0) { //data from comvis incoming
     String class_byte = Serial.readStringUntil('\n'); // Read computer vision data until newline
     class_byte.trim();
@@ -188,7 +260,7 @@ void loop() {
       spaceIndex_class = class_byte.indexOf(' ');                    
     }
 
-    if(cmos.available() > 0){ // data from cmos incoming
+    if(cmos.available()){ // data from cmos incoming || UPDATE: may miss incoming sensor data if the buffer is cleared before it is read. Removed '> 0'
       String dis_byte = cmos.readStringUntil('\n'); // Read CMOS data until newline
       dis_byte.trim();
       int dis[3];
