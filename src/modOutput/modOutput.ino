@@ -32,17 +32,16 @@ const int weights[] = {
 };
 
 bool handshakeComplete = false;
+bool cvHandshakeComplete = false;
 
-// --- Handshake Procedure ---
-// This function now flushes any stray data from the CMOS serial buffer
-// before waiting (with a small delay per loop iteration) for the handshake.
+// --- Handshake Procedure for ToF Module (via CMOS) ---
 void handshakeProcedure() {
-  Serial.println(F("[HANDSHAKE] Waiting for handshake from ToF module..."));
+  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Waiting for handshake from ToF module..."));
   
   // Flush any stray data in the CMOS serial buffer
   while (cmos.available()) {
     char flushed = cmos.read();
-    Serial.print(F("[HANDSHAKE] Flushed stray byte: "));
+    Serial.print(F("[OUTPUT][HANDSHAKE][TOF] Flushed stray byte: "));
     Serial.println(flushed);
   }
   
@@ -53,23 +52,52 @@ void handshakeProcedure() {
     if (cmos.available() > 0) {
       String incoming = cmos.readStringUntil('\n');
       incoming.trim();
-      Serial.print(F("[HANDSHAKE] Received: "));
+      Serial.print(F("[OUTPUT][HANDSHAKE][TOF] Received: "));
       Serial.println(incoming);
       if (incoming.equals("HELLO_TOF")) {
          cmos.println("HELLO_OUTPUT");
-         Serial.println(F("[HANDSHAKE] Sent: HELLO_OUTPUT"));
+         Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Sent: HELLO_OUTPUT"));
          handshakeReceived = true;
          handshakeComplete = true;
       }
       else {
-         Serial.println(F("[HANDSHAKE] Received unknown message."));
+         Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Received unknown message."));
       }
     }
     delay(50); // Give a little time for more data to arrive
   }
   
   if (!handshakeReceived) {
-    Serial.println(F("[HANDSHAKE] No handshake received within timeout."));
+    Serial.println(F("[OUTPUT][HANDSHAKE][TOF] No handshake received within timeout."));
+  }
+}
+
+// --- Handshake Procedure for CV Module (via USB Serial) ---
+void cvHandshakeProcedure() {
+  Serial.println("[OUTPUT][HANDSHAKE][CV] Waiting for handshake from CV module...");
+  unsigned long startTime = millis();
+  bool handshakeReceived = false;
+  
+  while ((millis() - startTime < 10000) && !handshakeReceived) {
+    if (Serial.available() > 0) {
+      String incoming = Serial.readStringUntil('\n');
+      incoming.trim();
+      Serial.print("[OUTPUT][HANDSHAKE][CV] Received handshake message: ");
+      Serial.println(incoming);
+      if (incoming.equals("HELLO_OUTPUT")) {
+         Serial.println("HELLO_CV");
+         Serial.println("[OUTPUT][HANDSHAKE][CV] Sent handshake response: HELLO_CV");
+         handshakeReceived = true;
+         cvHandshakeComplete = true;
+      } else {
+         Serial.println("[OUTPUT][HANDSHAKE][CV] Received unknown handshake message.");
+      }
+    }
+    delay(50);
+  }
+  
+  if (!handshakeReceived) {
+    Serial.println("[OUTPUT][HANDSHAKE][CV] Handshake with CV module timed out.");
   }
 }
 
@@ -141,6 +169,8 @@ int* getWeights(int classes[5], int distance[3]) {
 
 // Function to activate respective motor
 void motorLogic(int segment){
+  Serial.print(F("[OUTPUT][HANDSHAKE] Activating motor logic for segment: "));
+  Serial.println(segment);
   switch (segment) {
       case 0: // left
         digitalWrite(motorPins[0], HIGH);
@@ -212,20 +242,28 @@ void setup() { // Turn off all motors
   while (!Serial) {
     ; 
   }
-  // --- ToF Handshake Procedure ---
-  Serial.println(F("[PROCESS] Starting Output Module Initialization (Uno)..."));
+  Serial.println(F("[OUTPUT][PROCESS] Starting Output Module Initialization (Uno)..."));
     
-    // Handshake with the ToF module (running on the Mega)
+    // Perform handshake with the ToF module (running on the Mega)
     while (!handshakeComplete) {
       handshakeProcedure();
       if (!handshakeComplete) {
-        Serial.println(F("[HANDSHAKE] Retrying handshake in 1 second..."));
+        Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Retrying handshake in 1 second..."));
         delay(1000);
       }
     }
-    Serial.println(F("[HANDSHAKE] Handshake complete. Starting main loop."));
-}
+    Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Handshake complete with ToF module."));
 
+    // Perform handshake with CV module (via USB Serial)
+    while (!cvHandshakeComplete) {
+      cvHandshakeProcedure();
+      if (!cvHandshakeComplete) {
+        Serial.println(F("[OUTPUT][HANDSHAKE][CV] Retrying handshake with CV module in 1 second..."));
+        delay(1000);
+      }
+    }
+    Serial.println(F("[OUTPUT][HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
+}
 
 void loop() {
 
@@ -234,25 +272,26 @@ void loop() {
   if (cmos.available()) {
     String sensorData = cmos.readStringUntil('\n');
     sensorData.trim();
-    Serial.print(F("[SENSOR DATA RECEIVED] "));
+    Serial.print(F("[OUTPUT][SENSOR][TOF] Data received: "));
     Serial.println(sensorData);
   }
 
-  // Detect disconnection and restart handshake if needed.
   if (!handshakeComplete) {
-    Serial.println(F("[HANDSHAKE] Lost connection! Restarting handshake..."));
+    Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Lost connection! Restarting handshake..."));
     handshakeProcedure();
     delay(1000);
   }
-
-  if (Serial.available() > 0) { //data from comvis incoming
+  
+  // Process data from CV module (via USB Serial)
+  if (Serial.available() > 0) {
     String class_byte = Serial.readStringUntil('\n'); // Read computer vision data until newline
     class_byte.trim();
+    Serial.print(F("[OUTPUT][DATA][CV] Received CV data: "));
+    Serial.println(class_byte);
+    
     int classes[5];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
-
-    // Store string values into classes array
     while (spaceIndex_class >= 0) {
       String classStr = class_byte.substring(0, spaceIndex_class);  
       classes[idx_class++] = classStr.toInt();                  
@@ -263,11 +302,11 @@ void loop() {
     if(cmos.available()){ // data from cmos incoming || UPDATE: may miss incoming sensor data if the buffer is cleared before it is read. Removed '> 0'
       String dis_byte = cmos.readStringUntil('\n'); // Read CMOS data until newline
       dis_byte.trim();
+      Serial.print(F("[OUTPUT][HANDSHAKE] Received CMOS distance data: "));
+      Serial.println(dis_byte);
       int dis[3];
       int idx_dis = 0;
       int spaceIndex_dis = dis_byte.indexOf(' ');
-
-      // Store string values into dis array
       while (spaceIndex_dis >= 0) {
         String disStr = dis_byte.substring(0, spaceIndex_dis);  
         dis[idx_dis++] = disStr.toInt();                  
@@ -278,7 +317,7 @@ void loop() {
       // get class scores
       int* scores = getWeights(classes, dis);
       if (scores == NULL) { // Ensure malloc didn't fail
-          Serial.println("Memory allocation failed.");
+          Serial.println(F("[OUTPUT][HANDSHAKE] Memory allocation failed."));
           return;
       }
 
@@ -287,7 +326,7 @@ void loop() {
       int maxScoreId = 0;
       if (areAllScoresZero(scores)){ // check if no object is detected
         motorLogic(-1);
-      }else{
+      } else {
         for (int i = 1; i < 5; i++) {  
           if (scores[i] > maxScore) {  
               maxScore = scores[i];
@@ -296,6 +335,9 @@ void loop() {
         }
         motorLogic(maxScoreId);
       }
+
+      Serial.print(F("[OUTPUT][HANDSHAKE] Motor logic executed for segment: "));
+      Serial.println(maxScoreId);
 
       // send information to mobile
       // Convert the scores array to a comma-separated string
@@ -316,13 +358,17 @@ void loop() {
       message += scoresString;  // Append the scores string
 //       message += "\n"; // append new line
       hc05.println(message);// Send the message to HC-05
+      Serial.print(F("[OUTPUT][HANDSHAKE] Sent a message to HC-05 message"));
     }
   }
 
     if (hc05.available()) {
         String receivedData = hc05.readStringUntil('\n');  // Read full message
         receivedData.trim();  // Remove trailing newline or spaces
+        Serial.print(F("[OUTPUT][HC-05] Received: "));
+        Serial.println(receivedData);
         if (receivedData == "motors") {
+          Serial.println(F("[OUTPUT][HANDSHAKE] Received 'motors' command from HC-05."));
           for (int i = 0; i< 3;i++){ // repeat 3 times
             for (int i = 0; i < 6; i++) {
               pinMode(motorPins[i], OUTPUT);
