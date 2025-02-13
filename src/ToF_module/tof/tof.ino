@@ -25,7 +25,7 @@ bool handshakeComplete = false;
 
 // --- Handshake Procedure ---
 void handshakeProcedure() {
-  Serial.println(F("[HANDSHAKE] Starting handshake with Output Module..."));
+  Serial.println(F("[HANDSHAKE] Entering continuous stream mode..."));
   
   // Flush any stray data on Serial1.
   while (Serial1.available()) {
@@ -34,31 +34,11 @@ void handshakeProcedure() {
     Serial.println(c);
   }
   
-  unsigned long startTime = millis();
-  bool ackReceived = false;
-  
-  while ((millis() - startTime < 5000) && !ackReceived) {
-    Serial1.println("HELLO_TOF");
-    Serial.println(F("[HANDSHAKE] Sent: HELLO_TOF"));
-    delay(500);
-    
-    if (Serial1.available()) {
-      String response = Serial1.readStringUntil('\n');
-      response.trim();
-      Serial.print(F("[HANDSHAKE] Received: "));
-      Serial.println(response);
-      if (response.equals("HELLO_OUTPUT")) {
-         ackReceived = true;
-         handshakeComplete = true;
-         Serial.println(F("[HANDSHAKE] Handshake complete!"));
-      }
-    }
-  }
-  
-  if (!ackReceived) {
-    Serial.println(F("[HANDSHAKE] Handshake failed, retrying..."));
-  }
+  // Immediately mark handshake as complete so the sensor data begins streaming continuously.
+  handshakeComplete = true;
+  Serial.println(F("[HANDSHAKE] Continuous stream mode enabled."));
 }
+
 
 bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, const char *name) {
   Serial.print(F("[INIT] Enabling "));

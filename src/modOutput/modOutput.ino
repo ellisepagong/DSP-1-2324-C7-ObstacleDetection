@@ -36,41 +36,20 @@ bool cvHandshakeComplete = false;
 
 // --- Handshake Procedure for ToF Module (via CMOS) ---
 void handshakeProcedure() {
-  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Waiting for handshake from ToF module..."));
+  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Entering continuous stream mode..."));
   
-  // Flush any stray data in the CMOS serial buffer
+  // Flush any stray data in the CMOS serial buffer.
   while (cmos.available()) {
     char flushed = cmos.read();
     Serial.print(F("[OUTPUT][HANDSHAKE][TOF] Flushed stray byte: "));
     Serial.println(flushed);
   }
   
-  unsigned long startTime = millis();
-  bool handshakeReceived = false;
-  
-  while ((millis() - startTime < 10000) && !handshakeReceived) {
-    if (cmos.available() > 0) {
-      String incoming = cmos.readStringUntil('\n');
-      incoming.trim();
-      Serial.print(F("[OUTPUT][HANDSHAKE][TOF] Received: "));
-      Serial.println(incoming);
-      if (incoming.equals("HELLO_TOF")) {
-         cmos.println("HELLO_OUTPUT");
-         Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Sent: HELLO_OUTPUT"));
-         handshakeReceived = true;
-         handshakeComplete = true;
-      }
-      else {
-         Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Received unknown message."));
-      }
-    }
-    delay(50); // Give a little time for more data to arrive
-  }
-  
-  if (!handshakeReceived) {
-    Serial.println(F("[OUTPUT][HANDSHAKE][TOF] No handshake received within timeout."));
-  }
+  // Immediately mark handshake as complete so the module switches to continuous streaming.
+  handshakeComplete = true;
+  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Continuous stream mode enabled."));
 }
+
 
 // --- Handshake Procedure for CV Module (via USB Serial) ---
 void cvHandshakeProcedure() {
