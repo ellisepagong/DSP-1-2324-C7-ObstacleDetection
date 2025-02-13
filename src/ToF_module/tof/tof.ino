@@ -121,7 +121,18 @@ void loop() {
   
   uint16_t left_cm = left_mm / 10;
   uint16_t center_cm = center_mm / 10;
-  uint16_t right_cm = right_mm / 10;
+  
+  // Use a static variable to keep the previous valid right sensor reading.
+  static uint16_t prevRight_cm = 0;
+  uint16_t right_cm;
+  
+  // If the right sensor returns its "no object" value (8190 mm), use the previous reading.
+  if (right_mm >= 8190) {
+    right_cm = prevRight_cm;  
+  } else {
+    right_cm = right_mm / 10;
+    prevRight_cm = right_cm;  // update stored value
+  }
   
   Serial.print(F("[SENSOR DATA] Left: "));
   Serial.print(left_cm);
@@ -138,3 +149,4 @@ void loop() {
   
   delay(100);
 }
+
