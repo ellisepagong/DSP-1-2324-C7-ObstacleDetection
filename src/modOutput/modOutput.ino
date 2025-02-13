@@ -53,32 +53,10 @@ void handshakeProcedure() {
 
 // --- Handshake Procedure for CV Module (via USB Serial) ---
 void cvHandshakeProcedure() {
-  Serial.println("[OUTPUT][HANDSHAKE][CV] Waiting for handshake from CV module...");
-  unsigned long startTime = millis();
-  bool handshakeReceived = false;
-  
-  while ((millis() - startTime < 10000) && !handshakeReceived) {
-    if (Serial.available() > 0) {
-      String incoming = Serial.readStringUntil('\n');
-      incoming.trim();
-      Serial.print("[OUTPUT][HANDSHAKE][CV] Received handshake message: ");
-      Serial.println(incoming);
-      if (incoming.equals("HELLO_OUTPUT")) {
-         Serial.println("HELLO_CV");
-         Serial.println("[OUTPUT][HANDSHAKE][CV] Sent handshake response: HELLO_CV");
-         handshakeReceived = true;
-         cvHandshakeComplete = true;
-      } else {
-         Serial.println("[OUTPUT][HANDSHAKE][CV] Received unknown handshake message.");
-      }
-    }
-    delay(50);
-  }
-  
-  if (!handshakeReceived) {
-    Serial.println("[OUTPUT][HANDSHAKE][CV] Handshake with CV module timed out.");
-  }
+  Serial.println("[OUTPUT][HANDSHAKE][CV] Disabling handshake for CV module. Continuous mode enabled.");
+  cvHandshakeComplete = true;
 }
+
 
 // --- Other Procedures ---
 int* getWeights(int classes[5], int distance[3]) {
