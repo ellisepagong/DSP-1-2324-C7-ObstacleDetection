@@ -1,9 +1,8 @@
-#documentation: https://www.ultralytics.com/blog/object-detection-with-a-pre-trained-ultralytics-yolov8-model
+# documentation: https://www.ultralytics.com/blog/object-detection-with-a-pre-trained-ultralytics-yolov8-model
 
-# Sends largest object to arduino
+# Sends largest object to Arduino
 # This is assuming the largest object is the closest as indicated by TOF sensor
 # Additional logic will be used once TOF output is confirmed
-
 
 import threading
 import time
@@ -31,22 +30,10 @@ max_width = 720  # video pixel width
 seg_size = max_width / 5
 
 def handshake_with_output():
-    print("[CV][HANDSHAKE] Initiating handshake with OUTPUT module...")
-    # Send handshake initiation to OUTPUT module
-    arduino.write("HELLO_OUTPUT\n".encode())
-    start_time = time.time()
-    while time.time() - start_time < 10:
-        if arduino.in_waiting:
-            response = arduino.readline().decode().strip()
-            print("[CV][HANDSHAKE] Received:", response)
-            if response == "HELLO_CV":
-                print("[CV][HANDSHAKE] Handshake successful with OUTPUT module.")
-                return True
-            else:
-                print("[CV][HANDSHAKE] Unexpected response. Waiting...")
-        time.sleep(0.1)
-    print("[CV][HANDSHAKE] Handshake with OUTPUT module failed.")
-    return False
+    # With continuous stream mode enabled on the OUTPUT module,
+    # no handshake is needed. Simply return success.
+    print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
+    return True
 
 def read_from_output():
     # Continuously read any log messages from OUTPUT module and print them
@@ -102,7 +89,7 @@ def main():
     # Start a thread to continuously print OUTPUT module logs
     threading.Thread(target=read_from_output, daemon=True).start()
     
-    # Perform handshake with the OUTPUT module
+    # Skip handshake since the OUTPUT module now works in continuous mode.
     if not handshake_with_output():
         print("[CV] Handshake failed, exiting.")
         return
