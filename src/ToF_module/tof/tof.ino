@@ -1,6 +1,10 @@
 /*
    ToF Sensor Module Sketch for Arduino Mega 2560
-   Modified to support re-handshaking using message prefixes.
+
+   - Reads three VL53L0X sensors.
+   - Implements a handshake over Serial1 (TX1 on D18, RX1 on D19) with the Output Module.
+   - Sends sensor data as a space-delimited string: "left_cm center_cm right_cm".
+   - Logs status messages via USB Serial.
 */
 
 #include <Wire.h>
@@ -34,9 +38,8 @@ void handshakeProcedure() {
   bool ackReceived = false;
   
   while ((millis() - startTime < 5000) && !ackReceived) {
-    // Send handshake message with prefix
-    Serial1.println("HS:HELLO_TOF");
-    Serial.println(F("[HANDSHAKE] Sent: HS:HELLO_TOF"));
+    Serial1.println("HELLO_TOF");
+    Serial.println(F("[HANDSHAKE] Sent: HELLO_TOF"));
     delay(500);
     
     if (Serial1.available()) {
@@ -44,7 +47,7 @@ void handshakeProcedure() {
       response.trim();
       Serial.print(F("[HANDSHAKE] Received: "));
       Serial.println(response);
-      if (response.equals("HS:HELLO_OUTPUT")) {
+      if (response.equals("HELLO_OUTPUT")) {
          ackReceived = true;
          handshakeComplete = true;
          Serial.println(F("[HANDSHAKE] Handshake complete!"));
@@ -119,26 +122,12 @@ void setup() {
   Serial1.begin(9600);  // TX1 on D18, RX1 on D19
   delay(100);
   
-  // Perform the initial handshake
   while (!handshakeComplete) {
     handshakeProcedure();
   }
 }
 
 void loop() {
-  // Check if the Output Module (Uno) is requesting a handshake.
-  if (Serial1.available()) {
-    String incoming = Serial1.readStringUntil('\n');
-    incoming.trim();
-    if (incoming.equals("HS:REQ_HANDSHAKE")) {
-      // Reset handshake flag and re-run handshake procedure.
-      handshakeComplete = false;
-      handshakeProcedure();
-      // Do not send sensor data until handshake completes.
-      return;
-    }
-  }
-  
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
   
   uint16_t left_mm = loxLeft.readRange();
@@ -162,8 +151,7 @@ void loop() {
   Serial.print(right_cm);
   Serial.println(F(" cm"));
   
-  // Prefix sensor data with "DATA:" so the Uno knows how to process it.
-  String sensorData = "DATA:" + String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
+  String sensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
   Serial1.println(sensorData);
   Serial.print(F("[PROCESS] Sent data to Output Module: "));
   Serial.println(sensorData);
