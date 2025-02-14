@@ -12,6 +12,9 @@
 const int motorPins[] = {8, 9, 10, 11, 12, 13};
 int prev = 0;
 
+// Declare global variable to store the latest ToF sensor data.
+String lastToFSensorData = "";
+
 // SoftwareSerial for HC-05 & CMOS module
 SoftwareSerial hc05(HC05_RX, HC05_TX); 
 SoftwareSerial cmos(CMOS_RX, CMOS_TX); 
@@ -224,24 +227,20 @@ void setup() { // Turn off all motors
 
 void loop() {
 
-  // --- ToF Handshake Procedure ---
-  // Check for incoming data from the ToF module.
+  // --- Process ToF sensor data (from cmos) independently ---
   if (cmos.available()) {
     String sensorData = cmos.readStringUntil('\n');
     sensorData.trim();
-    Serial.print(F("[OUTPUT][SENSOR][TOF] Data received: "));
-    Serial.println(sensorData);
+    if (sensorData.length() > 0) {
+      lastToFSensorData = sensorData;  // store latest reading
+      Serial.print(F("[OUTPUT][SENSOR][TOF] Data received: "));
+      Serial.println(sensorData);
+    }
   }
 
-  if (!handshakeComplete) {
-    Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Lost connection! Restarting handshake..."));
-    handshakeProcedure();
-    delay(1000);
-  }
-  
-  // Process data from CV module (via USB Serial)
+  // --- Process CV module data (from hardware Serial) independently ---
   if (Serial.available() > 0) {
-    String class_byte = Serial.readStringUntil('\n'); // Read computer vision data until newline
+    String class_byte = Serial.readStringUntil('\n'); // Read CV data until newline
     class_byte.trim();
     Serial.print(F("[OUTPUT][DATA][CV] Received CV data: "));
     Serial.println(class_byte);
@@ -250,10 +249,10 @@ void loop() {
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
     while (spaceIndex_class >= 0) {
-      String classStr = class_byte.substring(0, spaceIndex_class);  
-      classes[idx_class++] = classStr.toInt();                  
-      class_byte = class_byte.substring(spaceIndex_class + 1);            
-      spaceIndex_class = class_byte.indexOf(' ');                    
+      String classStr = class_byte.substring(0, spaceIndex_class);
+      classes[idx_class++] = classStr.toInt();
+      class_byte = class_byte.substring(spaceIndex_class + 1);
+      spaceIndex_class = class_byte.indexOf(' ');
     }
 
     if(cmos.available()){ // data from cmos incoming || UPDATE: may miss incoming sensor data if the buffer is cleared before it is read. Removed '> 0'
