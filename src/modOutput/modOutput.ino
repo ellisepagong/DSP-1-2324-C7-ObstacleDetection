@@ -318,25 +318,25 @@ void loop() {
     }
   }
 
-    if (hc05.available()) {
-        String receivedData = hc05.readStringUntil('\n');  // Read full message
-        receivedData.trim();  // Remove trailing newline or spaces
-        Serial.print(F("[OUTPUT][HC-05] Received: "));
-        Serial.println(receivedData);
-        if (receivedData == "motors") {
-          Serial.println(F("[OUTPUT][HANDSHAKE] Received 'motors' command from HC-05."));
-          for (int i = 0; i< 3;i++){ // repeat 3 times
-            for (int i = 0; i < 6; i++) {
-              pinMode(motorPins[i], OUTPUT);
-              digitalWrite(motorPins[i], HIGH);  
-            }
-            delay(500);
-            for (int i = 0; i < 6; i++) {
-              pinMode(motorPins[i], OUTPUT);
-              digitalWrite(motorPins[i], LOW);  
-            }
-            delay(500);
+  if (hc05.available()) {
+      String receivedData = hc05.readStringUntil('\n');  // Read full message
+      receivedData.trim();  // Remove trailing newline or spaces
+      Serial.print(F("[OUTPUT][HC-05] Received: "));
+      Serial.println(receivedData);
+      if (receivedData == "motors") {
+        Serial.println(F("[OUTPUT][HANDSHAKE] Received 'motors' command from HC-05."));
+        for (int i = 0; i< 3;i++){ // repeat 3 times
+          for (int i = 0; i < 6; i++) {
+            pinMode(motorPins[i], OUTPUT);
+            digitalWrite(motorPins[i], HIGH);  
           }
+          delay(500);
+          for (int i = 0; i < 6; i++) {
+            pinMode(motorPins[i], OUTPUT);
+            digitalWrite(motorPins[i], LOW);  
+          }
+          delay(500);
         }
-    }
+      }
+  }
 }
