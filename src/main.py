@@ -1,18 +1,14 @@
-# documentation: https://www.ultralytics.com/blog/object-detection-with-a-pre-trained-ultralytics-yolov8-model
-
-# Sends largest object to Arduino
-# This is assuming the largest object is the closest as indicated by TOF sensor
-# Additional logic will be used once TOF output is confirmed
-
 import threading
 import time
-from ultralytics import YOLO
-import cv2, torch
+import cv2
+import numpy as np
+from tflite_runtime.interpreter import Interpreter
 import serial
 
 # Establish USB connection with Arduino (OUTPUT module)
-arduino = serial.Serial(port='COM5', baudrate=9600, timeout=1)  # Starts connection with Arduino
+arduino = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)  # Starts connection with Arduino
 
+# Class dictionary (must match your model’s class order)
 classes_dict = {
     0: 'animal',
     1: 'barrier',
@@ -26,7 +22,8 @@ classes_dict = {
     9: 'vehicle'
 }
 
-max_width = 720  # video pixel width
+# Display configuration (we want 720px width for segmentation)
+max_width = 720  
 seg_size = max_width / 5
 
 def handshake_with_output():
@@ -39,15 +36,17 @@ def read_from_output():
     # Continuously read any log messages from OUTPUT module and print them
     while True:
         if arduino.in_waiting:
-            line = arduino.readline().decode().strip()
+            # Replace invalid bytes with the Unicode replacement character
+            line = arduino.readline().decode('utf-8', errors='replace').strip()
             if line:
                 print("[OUTPUT LOG]", line)
         time.sleep(0.1)
 
+
 def send_to_arduino(largest_boxes):
     # Build a list of class IDs (or -1 for missing detections)
     classes_message = [
-        int(data[2].item()) if data is not None else -1
+        int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
     ]
     # Use a space as delimiter (matches OUTPUT module's expected format)
@@ -55,9 +54,9 @@ def send_to_arduino(largest_boxes):
     arduino.write(message.encode())
     print("[CV] Sent to OUTPUT:", message.strip())
 
-def display_pred(img, largest_box):
+def display_pred(img, largest_boxes):
     # Draw bounding boxes and labels on the image
-    for data in largest_box.values():
+    for data in largest_boxes.values():
         if data is not None:
             box, conf, cls = data
             x1, y1, x2, y2 = box
@@ -79,12 +78,89 @@ def assign_segment(x1, x2):
         segment_index = 4
     return segment_index
 
+def preprocess_input(image, input_size):
+    # Resize image to (input_size, input_size) and normalize
+    resized_img = cv2.resize(image, (input_size, input_size))
+    normalized_img = resized_img / 255.0  # Normalize if required by your model
+    input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
+    return input_tensor
+
+def non_max_suppression(detections, iou_threshold):
+    if len(detections) == 0:
+        return []
+    
+    detections = np.array(detections)
+    x1 = detections[:, 2]
+    y1 = detections[:, 3]
+    x2 = detections[:, 4]
+    y2 = detections[:, 5]
+    scores = detections[:, 1]
+    
+    # Prepare boxes for cv2.dnn.NMSBoxes ([x, y, w, h])
+    boxes = []
+    for i in range(len(detections)):
+        boxes.append([int(x1[i]), int(y1[i]), int(x2[i] - x1[i]), int(y2[i] - y1[i])])
+    
+    indices = cv2.dnn.NMSBoxes(boxes, scores.tolist(), score_threshold=0.5, nms_threshold=iou_threshold)
+    indices = indices.flatten() if len(indices) > 0 else []
+    return [detections[i] for i in indices]
+
+def process_detections(output_data, input_shape, conf_threshold=0.5, iou_threshold=0.5):
+    """
+    Assumes TFLite output_data has shape [1, 14, 8400]:
+      - The first 4 numbers in each row are: x_center, y_center, width, height (normalized).
+      - The remaining 10 numbers are class scores.
+    """
+    output_data = np.squeeze(output_data)  # Shape: [14, 8400]
+    output_data = np.transpose(output_data)  # Shape: [8400, 14]
+    
+    detections = []
+    img_height, img_width = input_shape[:2]
+    
+    for detection in output_data:
+        x_center, y_center, width, height = detection[0:4]
+        class_scores = detection[4:]
+        
+        class_id = np.argmax(class_scores)
+        score = class_scores[class_id]
+        
+        if score > conf_threshold:
+            # Convert normalized coordinates to image coordinates (based on model input size)
+            x_center *= img_width
+            y_center *= img_height
+            width *= img_width
+            height *= img_height
+            
+            x1 = x_center - width / 2
+            y1 = y_center - height / 2
+            x2 = x_center + width / 2
+            y2 = y_center + height / 2
+            
+            detections.append([class_id, score, x1, y1, x2, y2])
+    
+    # Apply Non-Maximum Suppression (NMS)
+    detections = non_max_suppression(detections, iou_threshold)
+    
+    return detections
+
 def main():
-    torch.cuda.set_device(0)
+    # Desired display resolution for video (for segmentation purposes)
+    display_width = 720
+    display_height = 480
+
     print("[CV] Starting video stream...")
-    # Use your video source (camera feed or file)
-    video_stream = cv2.VideoCapture("testvid.mp4")
-    model = YOLO('model.pt')
+    video_stream = cv2.VideoCapture("testvid3.mp4")
+    
+    # Load the TFLite model
+    print("[CV] Loading TFLite model...")
+    interpreter = Interpreter(model_path="model_float16.tflite")
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    
+    # Assume model expects square input; retrieve input size (e.g., 640)
+    input_size = input_details[0]['shape'][1]
+    print(f"[CV] Model input size: {input_size}x{input_size}")
     
     # Start a thread to continuously print OUTPUT module logs
     threading.Thread(target=read_from_output, daemon=True).start()
@@ -97,37 +173,62 @@ def main():
     print("[CV] Handshake complete, starting main loop.")
     
     while True:
-        ret, img = video_stream.read()
+        ret, frame = video_stream.read()
         if not ret:
             print("[CV] Failed to grab frame.")
             break
-        img = cv2.resize(img, (720, 480))
-        results = model(source=img, show=False, conf=0.5, save=True)
         
-        for result in results:
-            boxes = result.boxes.xyxy
-            confs = result.boxes.conf
-            classes = result.boxes.cls
-            largest_boxes = {i: None for i in range(5)}
-            largest_areas = {i: 0 for i in range(5)}
+        # Resize frame for display (and for segmentation calculations)
+        frame_disp = cv2.resize(frame, (display_width, display_height))
+        
+        # Preprocess the display frame for model input
+        input_tensor = preprocess_input(frame_disp, input_size)
+        
+        # Run inference with TFLite
+        interpreter.set_tensor(input_details[0]['index'], input_tensor)
+        interpreter.invoke()
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        
+        # Process detections; detections will have coordinates relative to the model input size
+        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.5, iou_threshold=0.5)
+        
+        # Calculate scaling factors to map from model input space to display space
+        scale_x = display_width / input_size
+        scale_y = display_height / input_size
+        
+        # Prepare a dictionary to hold the largest detection per segment
+        largest_boxes = {i: None for i in range(5)}
+        largest_areas = {i: 0 for i in range(5)}
+        
+        for detection in detections:
+            class_id, score, x1, y1, x2, y2 = detection
             
-            for box, conf, cls in zip(boxes, confs, classes):
-                x1, y1, x2, y2 = box
-                area = (x2 - x1) * (y2 - y1)
-                if classes_dict[int(cls)] == "pole":  # Adjust pole size
-                    area *= 0.3
-                seg = assign_segment(x1, x2)
-                if area > largest_areas[seg]:
-                    largest_areas[seg] = area
-                    largest_boxes[seg] = (box, conf, cls)
-                    
-            display_pred(img, largest_boxes)
-            send_to_arduino(largest_boxes)
+            # Scale detection coordinates to display image dimensions
+            x1_disp = x1 * scale_x
+            y1_disp = y1 * scale_y
+            x2_disp = x2 * scale_x
+            y2_disp = y2 * scale_y
+            
+            area = (x2_disp - x1_disp) * (y2_disp - y1_disp)
+            if classes_dict[int(class_id)] == "pole":  # Adjust pole size
+                area *= 0.3
+            
+            seg = assign_segment(x1_disp, x2_disp)
+            if area > largest_areas[seg]:
+                largest_areas[seg] = area
+                largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
         
-        cv2.imshow("Video", img)
-        if cv2.waitKey(10) == 27:
+        # Draw bounding boxes and labels on the display frame
+        display_pred(frame_disp, largest_boxes)
+        send_to_arduino(largest_boxes)
+        
+        cv2.imshow("Video", frame_disp)
+        if cv2.waitKey(10) == 27:  # Exit on pressing ESC
             print("[CV] Exiting main loop.")
             break
+    
+    video_stream.release()
+    cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main()
