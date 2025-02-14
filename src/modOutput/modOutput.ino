@@ -227,24 +227,25 @@ void setup() { // Turn off all motors
 
 void loop() {
 
-  // --- Process ToF sensor data (from cmos) independently ---
+  // --- Continuously update the latest CMOS sensor data ---
   if (cmos.available()) {
     String sensorData = cmos.readStringUntil('\n');
     sensorData.trim();
     if (sensorData.length() > 0) {
-      lastToFSensorData = sensorData;  // store latest reading
+      lastToFSensorData = sensorData;  // Save the latest sensor data
       Serial.print(F("[OUTPUT][SENSOR][TOF] Data received: "));
       Serial.println(sensorData);
     }
   }
 
-  // --- Process CV module data (from hardware Serial) independently ---
+  // --- Process CV module data (from hardware Serial) ---
   if (Serial.available() > 0) {
     String class_byte = Serial.readStringUntil('\n'); // Read CV data until newline
     class_byte.trim();
     Serial.print(F("[OUTPUT][DATA][CV] Received CV data: "));
     Serial.println(class_byte);
     
+    // Parse CV data into classes[]
     int classes[5];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
@@ -254,68 +255,68 @@ void loop() {
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
-
-    if(cmos.available()){ // data from cmos incoming || UPDATE: may miss incoming sensor data if the buffer is cleared before it is read. Removed '> 0'
-      String dis_byte = cmos.readStringUntil('\n'); // Read CMOS data until newline
-      dis_byte.trim();
-      Serial.print(F("[OUTPUT][HANDSHAKE] Received CMOS distance data: "));
-      Serial.println(dis_byte);
-      int dis[3];
-      int idx_dis = 0;
-      int spaceIndex_dis = dis_byte.indexOf(' ');
-      while (spaceIndex_dis >= 0) {
-        String disStr = dis_byte.substring(0, spaceIndex_dis);  
-        dis[idx_dis++] = disStr.toInt();                  
-        dis_byte = dis_byte.substring(spaceIndex_dis + 1);            
-        spaceIndex_dis = dis_byte.indexOf(' ');                    
-      }
-
-      // get class scores
-      int* scores = getWeights(classes, dis);
-      if (scores == NULL) { // Ensure malloc didn't fail
-          Serial.println(F("[OUTPUT][HANDSHAKE] Memory allocation failed."));
-          return;
-      }
-
-      // get highest score
-      int maxScore = 0;
-      int maxScoreId = 0;
-      if (areAllScoresZero(scores)){ // check if no object is detected
-        motorLogic(-1);
-      } else {
-        for (int i = 1; i < 5; i++) {  
-          if (scores[i] > maxScore) {  
-              maxScore = scores[i];
-              maxScoreId = i;
-          }
-        }
-        motorLogic(maxScoreId);
-      }
-
-      Serial.print(F("[OUTPUT][HANDSHAKE] Motor logic executed for segment: "));
-      Serial.println(maxScoreId);
-
-      // send information to mobile
-      // Convert the scores array to a comma-separated string
-      char scoresString[50] = "";
-      for (int i = 0; i < 5; i++) {
-        char temp[10];  // Temporary buffer for each number
-        sprintf(temp, "%d", scores[i]);  // Convert the number to a string
-        strcat(scoresString, temp);     // Append the number to the scoresString
-
-        if (i < 4) {  // Add a comma after each number except the last
-            strcat(scoresString, ",");
-        }
-      }
-
-      String message = class_byte;
-      // Append the scores string to the existing string
-      message += ",";       // Add a comma to separate from the existing string
-      message += scoresString;  // Append the scores string
-//       message += "\n"; // append new line
-      hc05.println(message);// Send the message to HC-05
-      Serial.print(F("[OUTPUT][HANDSHAKE] Sent a message to HC-05 message"));
+    
+    // Instead of reading from CMOS again, use the stored sensor data.
+    if (lastToFSensorData.length() == 0) {
+      Serial.println(F("[OUTPUT][HANDSHAKE] No CMOS distance data available."));
+      return;
     }
+    String dis_byte = lastToFSensorData;
+    Serial.print(F("[OUTPUT][HANDSHAKE] Using last CMOS distance data: "));
+    Serial.println(dis_byte);
+    
+    // Parse the distance data from dis_byte
+    int dis[3];
+    int idx_dis = 0;
+    int spaceIndex_dis = dis_byte.indexOf(' ');
+    while (spaceIndex_dis >= 0) {
+      String disStr = dis_byte.substring(0, spaceIndex_dis);  
+      dis[idx_dis++] = disStr.toInt();                  
+      dis_byte = dis_byte.substring(spaceIndex_dis + 1);            
+      spaceIndex_dis = dis_byte.indexOf(' ');
+    }
+
+    // Get class scores based on CV classes and CMOS distance data
+    int* scores = getWeights(classes, dis);
+    if (scores == NULL) { // Ensure malloc didn't fail
+      Serial.println(F("[OUTPUT][HANDSHAKE] Memory allocation failed."));
+      return;
+    }
+
+    // Determine the highest score (or take no action if all are zero)
+    int maxScore = 0;
+    int maxScoreId = 0;
+    if (areAllScoresZero(scores)) { 
+      motorLogic(-1);
+    } else {
+      for (int i = 1; i < 5; i++) {  
+        if (scores[i] > maxScore) {  
+          maxScore = scores[i];
+          maxScoreId = i;
+        }
+      }
+      motorLogic(maxScoreId);
+    }
+
+    Serial.print(F("[OUTPUT][HANDSHAKE] Motor logic executed for segment: "));
+    Serial.println(maxScoreId);
+
+    // Send information to mobile via HC-05
+    char scoresString[50] = "";
+    for (int i = 0; i < 5; i++) {
+      char temp[10];
+      sprintf(temp, "%d", scores[i]);
+      strcat(scoresString, temp);
+      if (i < 4) {
+        strcat(scoresString, ",");
+      }
+    }
+
+    String message = class_byte;
+    message += ",";
+    message += scoresString;
+    hc05.println(message);
+    Serial.println(F("[OUTPUT][HANDSHAKE] Sent a message to HC-05."));
   }
 
   if (hc05.available()) {
