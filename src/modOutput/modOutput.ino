@@ -1,4 +1,4 @@
-// Updated modoutput code with extra logging
+// Updated modoutput code with additional console logs
 
 #include <SoftwareSerial.h>
 
@@ -185,7 +185,7 @@ void setup() {
   while (!Serial) { ; }
   Serial.println(F("[OUTPUT][PROCESS] Starting Output Module Initialization (Uno)..."));
   
-  // Handshake with CMOS module (ToF sensor)
+  // Handshake with CMOS module (TOF sensor)
   while (!handshakeComplete) {
     handshakeProcedure();
     if (!handshakeComplete) {
@@ -193,7 +193,7 @@ void setup() {
       delay(1000);
     }
   }
-  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Handshake complete with ToF module."));
+  Serial.println(F("[OUTPUT][HANDSHAKE][TOF] Handshake complete with TOF module."));
   
   // Handshake with CV module
   while (!cvHandshakeComplete) {
@@ -207,8 +207,9 @@ void setup() {
 }
 
 void loop() {
-  // --- Process incoming CMOS data ---
+  // --- Check and process incoming CMOS data (TOF module) ---
   if (cmos.available()) {
+    Serial.println(F("[OUTPUT][INFO] Data detected on CMOS stream (TOF module)."));
     String incoming = cmos.readStringUntil('\n');
     incoming.trim();
     // Check message type by prefix
@@ -221,16 +222,17 @@ void loop() {
     } else if (incoming.startsWith("LOG:")) {
       String logMsg = incoming.substring(4);
       logMsg.trim();
-      Serial.print(F("[OUTPUT][SENSOR][TOF] Log from CMOS: "));
+      Serial.print(F("[OUTPUT][SENSOR][TOF] Log from TOF module: "));
       Serial.println(logMsg);
     } else {
-      Serial.print(F("[OUTPUT][SENSOR][TOF] Unknown message from CMOS: "));
+      Serial.print(F("[OUTPUT][SENSOR][TOF] Unknown message from TOF module: "));
       Serial.println(incoming);
     }
   }
 
-  // --- Process incoming CV module data from USB Serial ---
+  // --- Check and process incoming CV module data (USB Serial) ---
   if (Serial.available() > 0) {
+    Serial.println(F("[OUTPUT][INFO] Data detected on USB Serial (CV module)."));
     String class_byte = Serial.readStringUntil('\n');
     class_byte.trim();
     Serial.print(F("[OUTPUT][DATA][CV] Received CV data: "));
@@ -258,13 +260,13 @@ void loop() {
       Serial.println(class_byte);
     }
     
-    // Make sure we have valid sensor data from CMOS
+    // Make sure we have valid sensor data from the TOF module
     if (lastToFSensorData.length() == 0) {
-      Serial.println(F("[OUTPUT][HANDSHAKE] No CMOS distance data available."));
+      Serial.println(F("[OUTPUT][HANDSHAKE] No TOF sensor (CMOS) distance data available."));
       return;
     }
     String dis_byte = lastToFSensorData;
-    Serial.print(F("[OUTPUT][HANDSHAKE] Using last CMOS distance data: "));
+    Serial.print(F("[OUTPUT][HANDSHAKE] Using last TOF sensor distance data: "));
     Serial.println(dis_byte);
     
     // Parse the distance data
@@ -289,7 +291,7 @@ void loop() {
       Serial.println(dis_byte);
     }
     
-    // Compute scores using the parsed CV classes and CMOS distances
+    // Compute scores using the parsed CV classes and TOF distances
     int* scores = getWeights(classes, dis);
     if (scores == NULL) {
       Serial.println(F("[OUTPUT][HANDSHAKE] Memory allocation failed."));
@@ -316,7 +318,7 @@ void loop() {
       motorLogic(maxScoreId);
     }
     
-    // Prepare and send message via HC-05 (prefixing with "CV_DATA:" and "SCORES:" for clarity)
+    // Prepare and send message via HC-05 (with clear prefixes)
     char scoresString[50] = "";
     for (int i = 0; i < 5; i++) {
       char temp[10];

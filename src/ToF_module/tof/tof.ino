@@ -1,10 +1,10 @@
 /*
-   ToF Sensor Module Sketch for Arduino Mega 2560
+   ToF Sensor Module Sketch for Arduino Mega 2560 with additional logging
 
    - Reads three VL53L0X sensors.
-   - Implements a handshake over Serial1 (TX1 on D18, RX1 on D19) with the Output Module.
-   - Sends sensor data as a space-delimited string: "left_cm center_cm right_cm".
-   - Logs status messages via USB Serial.
+   - Implements a handshake over Serial1 with the Output Module.
+   - Sends sensor data as a space-delimited string prefixed with "SENS:".
+   - Sends log messages prefixed with "LOG:" to aid in debugging.
 */
 
 #include <Wire.h>
@@ -23,22 +23,19 @@ Adafruit_VL53L0X loxRight = Adafruit_VL53L0X();
 
 bool handshakeComplete = false;
 
-// --- Handshake Procedure ---
 void handshakeProcedure() {
   Serial.println(F("[HANDSHAKE] Entering continuous stream mode..."));
-  
-  // Flush any stray data on Serial1.
+  // Flush any stray data from Serial1
   while (Serial1.available()) {
     char c = Serial1.read();
     Serial.print(F("[HANDSHAKE] Flushed from Serial1: "));
     Serial.println(c);
   }
-  
-  // Immediately mark handshake as complete so the sensor data begins streaming continuously.
   handshakeComplete = true;
   Serial.println(F("[HANDSHAKE] Continuous stream mode enabled."));
+  // Also notify the Output Module
+  Serial1.println("LOG:Handshake complete. Sensor data streaming starting.");
 }
-
 
 bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, const char *name) {
   Serial.print(F("[INIT] Enabling "));
@@ -52,16 +49,19 @@ bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, c
     Serial.print(F("[ERROR] "));
     Serial.print(name);
     Serial.println(F(" sensor failed to initialize!"));
+    Serial1.println(String("LOG:") + name + " sensor failed to initialize!");
     return false;
   }
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
+  Serial1.println(String("LOG:") + name + " sensor initialized.");
   return true;
 }
 
 void enterIdleMode() {
   Serial.println(F("[IDLE MODE] Entering idle mode..."));
+  Serial1.println("LOG:Entering idle mode due to sensor failure.");
   while (true) {
     digitalWrite(LED_IDLE, HIGH);
     delay(150);
@@ -98,6 +98,7 @@ void setup() {
   }
   
   Serial.println(F("[PROCESS] Sensor initialization complete."));
+  Serial1.println("LOG:Sensor initialization complete.");
   
   Serial1.begin(9600);  // TX1 on D18, RX1 on D19
   delay(100);
@@ -116,22 +117,22 @@ void loop() {
   
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
+    Serial1.println("LOG:Sensor timeout! Entering idle mode.");
     enterIdleMode();
   }
   
   uint16_t left_cm = left_mm / 10;
   uint16_t center_cm = center_mm / 10;
-  
-  // Use a static variable to keep the previous valid right sensor reading.
   static uint16_t prevRight_cm = 0;
   uint16_t right_cm;
   
-  // If the right sensor returns its "no object" value (8190 mm), use the previous reading.
   if (right_mm >= 8190) {
-    right_cm = prevRight_cm;  
+    right_cm = prevRight_cm;
+    Serial.println(F("[PROCESS] Right sensor returned 'no object'. Using previous reading."));
+    Serial1.println("LOG:Right sensor 'no object' value; using previous reading.");
   } else {
     right_cm = right_mm / 10;
-    prevRight_cm = right_cm;  // update stored value
+    prevRight_cm = right_cm;
   }
   
   Serial.print(F("[SENSOR DATA] Left: "));
@@ -143,10 +144,11 @@ void loop() {
   Serial.println(F(" cm"));
   
   String sensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
-  Serial1.println(sensorData);
+  // Send sensor data with prefix "SENS:" so the Output Module can parse it
+  Serial1.println("SENS:" + sensorData);
+  Serial1.println("LOG:Sent sensor data to Output Module: " + sensorData);
   Serial.print(F("[PROCESS] Sent data to Output Module: "));
   Serial.println(sensorData);
   
   delay(100);
 }
-
