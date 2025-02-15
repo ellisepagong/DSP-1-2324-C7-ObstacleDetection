@@ -1,0 +1,503 @@
+/*
+Combined Code for ToF Sensor Module and Output Module on Arduino Mega 2560
+
+Pin Mapping:
+-------------
+ToF Sensors (VL53L0X):
+  - Left Sensor:
+      - XSHUT: Digital Pin 22
+      - I2C SDA: Pin 20, I2C SCL: Pin 21
+      - Address: 0x30
+  - Center Sensor:
+      - XSHUT: Digital Pin 23
+      - I2C SDA: Pin 20, I2C SCL: Pin 21
+      - Address: 0x31
+  - Right Sensor:
+      - XSHUT: Digital Pin 24
+      - I2C SDA: Pin 20, I2C SCL: Pin 21
+      - Address: 0x32
+
+LED for Idle Mode: Digital Pin 4 (Reassigned from 13 to avoid conflict with motor control)
+
+Motor Control Pins (Output Module):
+  - MotorPins: {8, 9, 10, 11, 12, 13}
+
+Bluetooth (HC-05) Module (Output Module):
+  - Using Hardware Serial2
+  - Connect HC-05 TX -> RX2 (Pin 16)
+  - Connect HC-05 RX -> TX2 (Pin 17)
+
+Raspberry Pi / CV Module (Output Module):
+  - Uses USB Serial (Serial)
+
+Note: This combined code integrates the functionality of the ToF sensor module (reading VL53L0X sensors) with the Output module (processing CV data, computing weights, and controlling motors), consolidating the serial communication.
+*/
+
+#include <Wire.h>
+#include <Adafruit_VL53L0X.h>
+
+// ------------------ Pin Definitions ------------------
+// ToF Sensor Module Pins
+#define PIN_XSHUT_LEFT    22
+#define PIN_XSHUT_CENTER  23
+#define PIN_XSHUT_RIGHT   24
+#define LED_IDLE          4   // Reassigned from 13 to avoid conflict with motor control
+
+// Motor control pins (Output Module)
+const int motorPins[] = {8, 9, 10, 11, 12, 13};
+
+// ------------------ Bluetooth and CV Module Serial Definitions ------------------
+// CV Module (Raspberry Pi) uses USB Serial: Serial
+// Bluetooth (HC-05) will use Hardware Serial2: Serial2 (Pins: RX2=16, TX2=17)
+
+// ------------------ Global Variables ------------------
+String lastToFSensorData = ""; // Latest sensor data as string (e.g., "left center right")
+
+// Weights array (for classes, index corresponds to class value offset by 1 in original code)
+const int weights[] = {
+  0, // none
+  1, // animal
+  2, // barrier
+  4, // bike
+  2, // crosswalk
+  1, // hazard-sign
+  3, // person
+  1, // pole
+  4, // stairs
+  1, // stall
+  5  // vehicle
+};
+
+bool handshakeComplete = false;
+bool cvHandshakeComplete = false;
+
+// For ToF sensors
+Adafruit_VL53L0X loxLeft = Adafruit_VL53L0X();
+Adafruit_VL53L0X loxCenter = Adafruit_VL53L0X();
+Adafruit_VL53L0X loxRight = Adafruit_VL53L0X();
+
+// For right sensor previous reading fallback
+static uint16_t prevRight_cm = 0;
+
+// ------------------ Function Definitions ------------------
+
+// ---------- Output Module Functions (from modOutput.ino) ----------
+
+// Handshake procedure for sensor module (originally from modOutput.ino, adjusted for combined code)
+void handshakeProcedure() {
+  Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Entering continuous sensor stream mode..."));
+  // In combined mode, sensor data is read directly, so no flushing required.
+  handshakeComplete = true;
+  Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Continuous sensor stream mode enabled."));
+}
+
+// CV handshake procedure (from modOutput.ino)
+void cvHandshakeProcedure() {
+  Serial.println("[OUTPUT LOG] [HANDSHAKE][CV] Disabling handshake for CV module. Continuous mode enabled.");
+  cvHandshakeComplete = true;
+}
+
+// Compute weights based on CV classes and sensor distances (from modOutput.ino)
+int* getWeights(int classes[5], int distance[3]) {
+  int* scores = (int*)malloc(5 * sizeof(int));
+  if (scores == NULL) {
+    return NULL;
+  }
+  for (int i = 0; i < 5; i++) {
+    int current = classes[i];
+    int base_w = 0, dis_w = 0, dir_w = 0, score = 0;
+    
+    if (current >= 0 && current <= 9) {
+      base_w = weights[current + 1];
+      int dis = 0;
+      if (i < 2) { // left
+        dis = distance[0];
+        if (i == 1) { dir_w = 2; }
+      } else if (i == 2) { // front
+        dis = distance[1];
+        dir_w = 3;
+      } else if (i >= 3 && i < 5) { // right
+        dis = distance[2];
+        if (i == 3) { dir_w = 2; }
+      } else {
+        scores[i] = -1;
+        continue;
+      }
+      dis_w = map(dis, 0, 200, 5, 1);
+      score = (dis_w * base_w) + dir_w;
+      if (dis_w > 3) {
+        score += 5;
+      }
+      scores[i] = score;
+      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      Serial.print(i);
+      Serial.print(F(" => current: "));
+      Serial.print(current);
+      Serial.print(F(", base_w: "));
+      Serial.print(base_w);
+      Serial.print(F(", distance: "));
+      Serial.print(dis);
+      Serial.print(F(", dis_w: "));
+      Serial.print(dis_w);
+      Serial.print(F(", dir_w: "));
+      Serial.print(dir_w);
+      Serial.print(F(", score: "));
+      Serial.println(score);
+    }
+    else if (current == -1) {
+      scores[i] = 0;
+      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      Serial.print(i);
+      Serial.println(F(" has no class (-1). Score set to 0."));
+    } else {
+      scores[i] = -1;
+      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      Serial.print(i);
+      Serial.println(F(" invalid. Score set to -1."));
+    }
+  }
+  return scores;
+}
+
+// Motor control logic (from modOutput.ino)
+void motorLogic(int segment) {
+  Serial.print(F("[OUTPUT LOG] [MOTOR] Activating motor logic for segment: "));
+  Serial.println(segment);
+  switch (segment) {
+    case 0: // left
+      digitalWrite(motorPins[0], HIGH);
+      digitalWrite(motorPins[1], HIGH);
+      digitalWrite(motorPins[2], LOW);
+      digitalWrite(motorPins[3], LOW);
+      digitalWrite(motorPins[4], LOW);
+      digitalWrite(motorPins[5], LOW);
+      break;
+    case 1: // front left
+      digitalWrite(motorPins[0], LOW);
+      digitalWrite(motorPins[1], HIGH);
+      digitalWrite(motorPins[2], HIGH);
+      digitalWrite(motorPins[3], LOW);
+      digitalWrite(motorPins[4], LOW);
+      digitalWrite(motorPins[5], LOW);
+      break;
+    case 2: // front
+      digitalWrite(motorPins[0], LOW);
+      digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], HIGH);
+      digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], LOW);
+      digitalWrite(motorPins[5], LOW);
+      break;
+    case 3: // front right
+      digitalWrite(motorPins[0], LOW);
+      digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], LOW);
+      digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], HIGH);
+      digitalWrite(motorPins[5], LOW);
+      break;
+    case 4: // right
+      digitalWrite(motorPins[0], LOW);
+      digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], LOW);
+      digitalWrite(motorPins[3], LOW);
+      digitalWrite(motorPins[4], HIGH);
+      digitalWrite(motorPins[5], HIGH);
+      break;
+    default:
+      for (int i = 0; i < 6; i++) {
+        digitalWrite(motorPins[i], LOW);
+      }
+      break;
+  }
+}
+
+// Check if all scores are zero (from modOutput.ino)
+int areAllScoresZero(int scores[5]) {
+  for (int i = 0; i < 5; i++) {
+    if (scores[i] != 0) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// ---------- ToF Sensor Module Functions (from tof.ino) ----------
+
+// Initialize a VL53L0X sensor (from tof.ino)
+bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, const char *name) {
+  Serial.print(F("[INIT] Enabling "));
+  Serial.print(name);
+  Serial.println(F(" sensor..."));
+  
+  digitalWrite(xshutPin, HIGH);
+  delay(10);
+  
+  if (!sensor.begin(address)) {
+    Serial.print(F("[ERROR] "));
+    Serial.print(name);
+    Serial.println(F(" sensor failed to initialize!"));
+    // Also send log to CV module via Serial (if needed)
+    Serial.println(String("LOG:") + name + " sensor failed to initialize!");
+    return false;
+  }
+  Serial.print(F("[SUCCESS] "));
+  Serial.print(name);
+  Serial.println(F(" sensor initialized."));
+  Serial.println(String("LOG:") + name + " sensor initialized.");
+  return true;
+}
+
+// Enter idle mode in case of sensor failure (from tof.ino)
+void enterIdleMode() {
+  Serial.println(F("[IDLE MODE] Entering idle mode..."));
+  Serial.println("LOG:Entering idle mode due to sensor failure.");
+  while (true) {
+    digitalWrite(LED_IDLE, HIGH);
+    delay(150);
+    digitalWrite(LED_IDLE, LOW);
+    delay(150);
+  }
+}
+
+// Read sensor data from VL53L0X sensors and update lastToFSensorData
+void readToFSensors() {
+  Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
+  
+  uint16_t left_mm = loxLeft.readRange();
+  uint16_t center_mm = loxCenter.readRange();
+  uint16_t right_mm = loxRight.readRange();
+  
+  if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
+    Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
+    Serial.println("LOG:Sensor timeout! Entering idle mode.");
+    enterIdleMode();
+  }
+  
+  uint16_t left_cm = left_mm / 10;
+  uint16_t center_cm = center_mm / 10;
+  uint16_t right_cm;
+  
+  if (right_mm >= 8190) {
+    right_cm = prevRight_cm;
+    Serial.println(F("[PROCESS] Right sensor returned 'no object'. Using previous reading."));
+    Serial.println("LOG:Right sensor 'no object' value; using previous reading.");
+  } else {
+    right_cm = right_mm / 10;
+    prevRight_cm = right_cm;
+  }
+  
+  Serial.print(F("[SENSOR DATA] Left: "));
+  Serial.print(left_cm);
+  Serial.print(F(" cm, Center: "));
+  Serial.print(center_cm);
+  Serial.print(F(" cm, Right: "));
+  Serial.print(right_cm);
+  Serial.println(F(" cm"));
+  
+  // Update global sensor data string (format: "left center right")
+  lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
+  Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
+  Serial.print(F("[PROCESS] Updated sensor data: "));
+  Serial.println(lastToFSensorData);
+}
+
+// ------------------ Setup ------------------
+void setup() {
+  // Initialize motor pins
+  for (int i = 0; i < 6; i++) {
+    pinMode(motorPins[i], OUTPUT);
+    digitalWrite(motorPins[i], LOW);
+  }
+  
+  // Initialize LED for idle mode
+  pinMode(LED_IDLE, OUTPUT);
+  digitalWrite(LED_IDLE, LOW);
+  
+  // Begin Serial for CV module (Raspberry Pi) - USB Serial
+  Serial.begin(9600);
+  while (!Serial) { ; }
+  
+  // Begin Serial2 for Bluetooth (HC-05)
+  Serial2.begin(9600);
+  
+  Serial.println(F("[OUTPUT LOG] [PROCESS] Starting Combined Module Initialization (Mega 2560)..."));
+  
+  // Initialize I2C for ToF sensors
+  Wire.begin();
+  
+  // Initialize ToF sensor XSHUT pins
+  pinMode(PIN_XSHUT_LEFT, OUTPUT);
+  pinMode(PIN_XSHUT_CENTER, OUTPUT);
+  pinMode(PIN_XSHUT_RIGHT, OUTPUT);
+  
+  digitalWrite(PIN_XSHUT_LEFT, LOW);
+  digitalWrite(PIN_XSHUT_CENTER, LOW);
+  digitalWrite(PIN_XSHUT_RIGHT, LOW);
+  delay(10);
+  
+  // Initialize ToF sensors
+  bool leftStatus = initializeSensor(PIN_XSHUT_LEFT, loxLeft, 0x30, "Left");
+  bool centerStatus = initializeSensor(PIN_XSHUT_CENTER, loxCenter, 0x31, "Center");
+  bool rightStatus = initializeSensor(PIN_XSHUT_RIGHT, loxRight, 0x32, "Right");
+  
+  if (!leftStatus || !centerStatus || !rightStatus) {
+    Serial.println(F("[ERROR] Sensor initialization failed!"));
+    enterIdleMode();
+  }
+  
+  Serial.println(F("[PROCESS] Sensor initialization complete."));
+  Serial.println("LOG:Sensor initialization complete.");
+  
+  // Handshake procedures
+  handshakeProcedure();
+  while (!handshakeComplete) {
+    Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Retrying handshake in 1 second..."));
+    delay(1000);
+    handshakeProcedure();
+  }
+  Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Handshake complete with sensor module."));
+  
+  cvHandshakeProcedure();
+  while (!cvHandshakeComplete) {
+    Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Retrying handshake with CV module in 1 second..."));
+    delay(1000);
+    cvHandshakeProcedure();
+  }
+  Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
+}
+
+// ------------------ Loop ------------------
+void loop() {
+  // --- Read sensor data from ToF sensors ---
+  readToFSensors();
+  
+  // --- Check and process incoming CV module data (via USB Serial) ---
+  if (Serial.available() > 0) {
+    Serial.println(F("[OUTPUT LOG] [INFO] Data detected on USB Serial (CV module)."));
+    String class_byte = Serial.readStringUntil('\n');
+    class_byte.trim();
+    Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
+    Serial.println(class_byte);
+    
+    // Parse CV data into an array of 5 integers
+    int classes[5];
+    int idx_class = 0;
+    int spaceIndex_class = class_byte.indexOf(' ');
+    while (spaceIndex_class >= 0 && idx_class < 5) {
+      String classStr = class_byte.substring(0, spaceIndex_class);
+      classes[idx_class++] = classStr.toInt();
+      Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
+      Serial.print(idx_class - 1);
+      Serial.print(F("]: "));
+      Serial.println(classStr);
+      class_byte = class_byte.substring(spaceIndex_class + 1);
+      spaceIndex_class = class_byte.indexOf(' ');
+    }
+    if (idx_class < 5) {
+      classes[idx_class++] = class_byte.toInt();
+      Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
+      Serial.print(idx_class - 1);
+      Serial.print(F("]: "));
+      Serial.println(class_byte);
+    }
+    
+    // Ensure we have valid sensor data from ToF sensors
+    if (lastToFSensorData.length() == 0) {
+      Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
+      return;
+    }
+    String dis_byte = lastToFSensorData;
+    Serial.print(F("[OUTPUT LOG] [HANDSHAKE] Using latest sensor distance data: "));
+    Serial.println(dis_byte);
+    
+    // Parse the distance data (expecting three space-separated values)
+    int dis[3];
+    int idx_dis = 0;
+    int spaceIndex_dis = dis_byte.indexOf(' ');
+    while (spaceIndex_dis >= 0 && idx_dis < 3) {
+      String disStr = dis_byte.substring(0, spaceIndex_dis);
+      dis[idx_dis++] = disStr.toInt();
+      Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
+      Serial.print(idx_dis - 1);
+      Serial.print(F("]: "));
+      Serial.println(disStr);
+      dis_byte = dis_byte.substring(spaceIndex_dis + 1);
+      spaceIndex_dis = dis_byte.indexOf(' ');
+    }
+    if (idx_dis < 3) {
+      dis[idx_dis++] = dis_byte.toInt();
+      Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
+      Serial.print(idx_dis - 1);
+      Serial.print(F("]: "));
+      Serial.println(dis_byte);
+    }
+    
+    // Compute scores using the parsed CV classes and sensor distances
+    int* scores = getWeights(classes, dis);
+    if (scores == NULL) {
+      Serial.println(F("[OUTPUT LOG] [HANDSHAKE] Memory allocation failed."));
+      return;
+    }
+    
+    // Determine the highest score among the segments
+    int maxScore = 0;
+    int maxScoreId = 0;
+    if (areAllScoresZero(scores)) {
+      Serial.println(F("[OUTPUT LOG] [MOTOR] All scores are zero. Executing default motor logic."));
+      motorLogic(-1);
+    } else {
+      for (int i = 1; i < 5; i++) {
+        if (scores[i] > maxScore) {
+          maxScore = scores[i];
+          maxScoreId = i;
+        }
+      }
+      Serial.print(F("[OUTPUT LOG] [MOTOR] Highest score is "));
+      Serial.print(maxScore);
+      Serial.print(F(" at index "));
+      Serial.println(maxScoreId);
+      motorLogic(maxScoreId);
+    }
+    
+    // Prepare and send message via Bluetooth (HC-05 on Serial2)
+    char scoresString[50] = "";
+    for (int i = 0; i < 5; i++) {
+      char temp[10];
+      sprintf(temp, "%d", scores[i]);
+      strcat(scoresString, temp);
+      if (i < 4) {
+        strcat(scoresString, ",");
+      }
+    }
+    String message = String("CV_DATA: ") + class_byte + ",SCORES:" + scoresString;
+    Serial2.println(message);
+    Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
+    Serial.println(message);
+    
+    free(scores);
+  }
+  
+  // --- Process HC-05 commands received via Bluetooth (Serial2) ---
+  if (Serial2.available()) {
+    String receivedData = Serial2.readStringUntil('\n');
+    receivedData.trim();
+    Serial.print(F("[OUTPUT LOG] [HC-05] Received: "));
+    Serial.println(receivedData);
+    if (receivedData == "motors") {
+      Serial.println(F("[OUTPUT LOG] [MOTOR] Received 'motors' command from HC-05."));
+      for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 6; j++) {
+          digitalWrite(motorPins[j], HIGH);
+        }
+        delay(500);
+        for (int j = 0; j < 6; j++) {
+          digitalWrite(motorPins[j], LOW);
+        }
+        delay(500);
+      }
+    }
+  }
+  
+  delay(100);
+}
