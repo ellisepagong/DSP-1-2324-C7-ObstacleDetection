@@ -32,7 +32,13 @@ Raspberry Pi / CV Module (Output Module):
 
 Additional Feature:
 -------------
-If no new CV data is received within 3 seconds, the motor control logic will disable the motors.
+If any sensor records a value of 400cm or more, the previous value is used.
+If no new CV data is received within 3 seconds, the motor control logic disables the motors.
+
+Timing Deliverables:
+-------------
+SO2: Logs the time (in ms) required to process sensor data (should be < 1000 ms for 90% of data).
+SO4: Logs the time (in ms) from receiving CV data to providing feedback (should be < 250 ms).
 */
 
 #include <Wire.h>
@@ -78,7 +84,9 @@ Adafruit_VL53L0X loxLeft = Adafruit_VL53L0X();
 Adafruit_VL53L0X loxCenter = Adafruit_VL53L0X();
 Adafruit_VL53L0X loxRight = Adafruit_VL53L0X();
 
-// For right sensor previous reading fallback
+// For previous reading fallback (for all three sensors)
+static uint16_t prevLeft_cm = 0;
+static uint16_t prevCenter_cm = 0;
 static uint16_t prevRight_cm = 0;
 
 // Variable to track the last time CV data was received
@@ -88,7 +96,7 @@ unsigned long lastCVTime = 0;
 
 // ---------- Output Module Functions (from modOutput.ino) ----------
 
-// Handshake procedure for sensor module (originally from modOutput.ino, adjusted for combined code)
+// Handshake procedure for sensor module (adjusted for combined code)
 void handshakeProcedure() {
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Entering continuous sensor stream mode..."));
   // In combined mode, sensor data is read directly, so no flushing required.
@@ -279,14 +287,30 @@ void readToFSensors() {
     enterIdleMode();
   }
   
-  uint16_t left_cm = left_mm / 10;
-  uint16_t center_cm = center_mm / 10;
-  uint16_t right_cm;
+  uint16_t left_cm, center_cm, right_cm;
   
-  if (right_mm >= 8190) {
+  // For left sensor: if reading is 400cm or more, use previous value
+  if ((left_mm / 10) >= 400) {
+    left_cm = prevLeft_cm;
+    Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
+  } else {
+    left_cm = left_mm / 10;
+    prevLeft_cm = left_cm;
+  }
+  
+  // For center sensor:
+  if ((center_mm / 10) >= 400) {
+    center_cm = prevCenter_cm;
+    Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
+  } else {
+    center_cm = center_mm / 10;
+    prevCenter_cm = center_cm;
+  }
+  
+  // For right sensor:
+  if ((right_mm / 10) >= 400) {
     right_cm = prevRight_cm;
-    Serial.println(F("[PROCESS] Right sensor returned 'no object'. Using previous reading."));
-    Serial.println("LOG:Right sensor 'no object' value; using previous reading.");
+    Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
   } else {
     right_cm = right_mm / 10;
     prevRight_cm = right_cm;
@@ -377,11 +401,18 @@ void setup() {
 
 // ------------------ Loop ------------------
 void loop() {
-  // --- Read sensor data from ToF sensors ---
+  // --- Measure Sensor Data Processing Time (SO2) ---
+  unsigned long sensorStart = millis();
   readToFSensors();
+  unsigned long sensorEnd = millis();
+  unsigned long sensorDuration = sensorEnd - sensorStart;
+  Serial.print(F("[TIMING] [SO2] Sensor data processed in "));
+  Serial.print(sensorDuration);
+  Serial.println(F(" ms."));
   
   // --- Process incoming CV module data (via USB Serial) ---
   if (Serial.available() > 0) {
+    unsigned long cvStartTime = millis(); // Start timing for CV data processing
     lastCVTime = millis(); // Update timestamp when new CV data is received
     Serial.println(F("[OUTPUT LOG] [INFO] Data detected on USB Serial (CV module)."));
     String class_byte = Serial.readStringUntil('\n');
@@ -485,6 +516,12 @@ void loop() {
     Serial.println(message);
     
     free(scores);
+    
+    unsigned long cvEndTime = millis();
+    unsigned long cvDuration = cvEndTime - cvStartTime;
+    Serial.print(F("[TIMING] [SO4] CV data processed and feedback provided in "));
+    Serial.print(cvDuration);
+    Serial.println(F(" ms."));
   }
   
   // --- Stopping Mechanism: If no new CV data for 3 seconds, stop motors ---
