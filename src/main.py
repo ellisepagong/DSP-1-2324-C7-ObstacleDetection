@@ -6,7 +6,7 @@ from tflite_runtime.interpreter import Interpreter
 import serial
 
 # Establish USB connection with Arduino (OUTPUT module)
-arduino = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)  # Starts connection with Arduino
+arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)  # Starts connection with Arduino
 
 # Class dictionary (must match your model’s class order)
 classes_dict = {
