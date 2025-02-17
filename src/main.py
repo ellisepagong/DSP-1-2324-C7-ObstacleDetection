@@ -190,7 +190,7 @@ def main():
         output_data = interpreter.get_tensor(output_details[0]['index'])
         
         # Process detections; detections will have coordinates relative to the model input size
-        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.5, iou_threshold=0.5)
+        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.21, iou_threshold=0.5)
         
         # Calculate scaling factors to map from model input space to display space
         scale_x = display_width / input_size
