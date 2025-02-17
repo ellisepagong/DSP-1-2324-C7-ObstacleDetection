@@ -30,7 +30,9 @@ Bluetooth (HC-05) Module (Output Module):
 Raspberry Pi / CV Module (Output Module):
   - Uses USB Serial (Serial)
 
-Note: This combined code integrates the functionality of the ToF sensor module (reading VL53L0X sensors) with the Output module (processing CV data, computing weights, and controlling motors), consolidating the serial communication.
+Additional Feature:
+-------------
+If no new CV data is received within 3 seconds, the motor control logic will disable the motors.
 */
 
 #include <Wire.h>
@@ -53,7 +55,7 @@ const int motorPins[] = {8, 9, 10, 11, 12, 13};
 // ------------------ Global Variables ------------------
 String lastToFSensorData = ""; // Latest sensor data as string (e.g., "left center right")
 
-// Weights array (for classes, index corresponds to class value offset by 1 in original code)
+// Weights array for class scores (index corresponds to class value offset by 1)
 const int weights[] = {
   0, // none
   1, // animal
@@ -78,6 +80,9 @@ Adafruit_VL53L0X loxRight = Adafruit_VL53L0X();
 
 // For right sensor previous reading fallback
 static uint16_t prevRight_cm = 0;
+
+// Variable to track the last time CV data was received
+unsigned long lastCVTime = 0;
 
 // ------------------ Function Definitions ------------------
 
@@ -205,6 +210,7 @@ void motorLogic(int segment) {
       digitalWrite(motorPins[5], HIGH);
       break;
     default:
+      // Turn off all motor pins
       for (int i = 0; i < 6; i++) {
         digitalWrite(motorPins[i], LOW);
       }
@@ -237,7 +243,6 @@ bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, c
     Serial.print(F("[ERROR] "));
     Serial.print(name);
     Serial.println(F(" sensor failed to initialize!"));
-    // Also send log to CV module via Serial (if needed)
     Serial.println(String("LOG:") + name + " sensor failed to initialize!");
     return false;
   }
@@ -365,6 +370,9 @@ void setup() {
     cvHandshakeProcedure();
   }
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
+  
+  // Initialize last CV data time to current time
+  lastCVTime = millis();
 }
 
 // ------------------ Loop ------------------
@@ -372,8 +380,9 @@ void loop() {
   // --- Read sensor data from ToF sensors ---
   readToFSensors();
   
-  // --- Check and process incoming CV module data (via USB Serial) ---
+  // --- Process incoming CV module data (via USB Serial) ---
   if (Serial.available() > 0) {
+    lastCVTime = millis(); // Update timestamp when new CV data is received
     Serial.println(F("[OUTPUT LOG] [INFO] Data detected on USB Serial (CV module)."));
     String class_byte = Serial.readStringUntil('\n');
     class_byte.trim();
@@ -476,6 +485,12 @@ void loop() {
     Serial.println(message);
     
     free(scores);
+  }
+  
+  // --- Stopping Mechanism: If no new CV data for 3 seconds, stop motors ---
+  if (millis() - lastCVTime >= 3000) {
+    Serial.println(F("[OUTPUT LOG] [MOTOR] No new CV data for 3 seconds. Stopping motors."));
+    motorLogic(-1);
   }
   
   // --- Process HC-05 commands received via Bluetooth (Serial2) ---
