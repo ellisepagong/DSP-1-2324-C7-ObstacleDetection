@@ -1,5 +1,5 @@
 /*
-Combined Code for ToF Sensor Module and Output Module on Arduino Mega 2560
+Combined Code for ToF Sensor Module and Output Module on Arduino Mega R3 CH340G 2560
 
 Pin Mapping:
 -------------
