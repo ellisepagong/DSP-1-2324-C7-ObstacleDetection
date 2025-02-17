@@ -24,8 +24,8 @@ Motor Control Pins (Output Module):
 
 Bluetooth (HC-05) Module (Output Module):
   - Using Hardware Serial2
-  - Connect HC-05 TX -> RX2 (Pin 16)
-  - Connect HC-05 RX -> TX2 (Pin 17)
+  - Connect HC-05 TX -> RX2 (Pin 17)
+  - Connect HC-05 RX -> TX2 (Pin 16)
 
 Raspberry Pi / CV Module (Output Module):
   - Uses USB Serial (Serial)
