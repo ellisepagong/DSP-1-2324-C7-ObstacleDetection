@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from tflite_runtime.interpreter import Interpreter
 import serial
+from picamera2 import Picamera2
 
 # Establish USB connection with Arduino (OUTPUT module)
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)  # Starts connection with Arduino
@@ -147,9 +148,12 @@ def main():
     display_width = 720
     display_height = 480
 
-    print("[CV] Starting video stream...")
-    video_stream = cv2.VideoCapture("testvid3.mp4")
-    
+    print("[CV] Starting camera stream using Picamera2...")
+    picam2 = Picamera2()
+    config = picam2.create_preview_configuration(main={"size": (display_width, display_height)})
+    picam2.configure(config)
+    picam2.start()
+
     # Load the TFLite model
     print("[CV] Loading TFLite model...")
     interpreter = Interpreter(model_path="model_float16_480x480.tflite")
@@ -175,9 +179,10 @@ def main():
     prev_frame_time = time.time()
     
     while True:
-        ret, frame = video_stream.read()
-        if not ret:
-            print("[CV] Failed to grab frame or end of video reached.")
+        # Capture frame using Picamera2
+        frame = picam2.capture_array()
+        if frame is None:
+            print("[CV] Failed to capture frame from camera.")
             break
         
         # Calculate live FPS based on frame capture timing
@@ -243,7 +248,7 @@ def main():
             print("[CV] Exiting main loop.")
             break
     
-    video_stream.release()
+    picam2.stop()
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
