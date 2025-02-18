@@ -202,13 +202,8 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
                 largest_areas[seg] = area
                 largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
         
-        # Draw inference results on the frame and send results to Arduino
-        display_pred(frame_disp, largest_boxes)
+        # Send results to Arduino
         send_to_arduino(largest_boxes)
-        
-        # --- NEW: Show the inference window ---
-        cv2.imshow("Inferences", frame_disp)
-        cv2.waitKey(1)
         
         # Log performance metrics
         current_time = time.time()
@@ -221,7 +216,6 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         
         # Yield briefly so the thread doesn't hog the CPU
         time.sleep(0.001)
-
 
 def main():
     global running, latest_frame
