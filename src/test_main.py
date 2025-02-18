@@ -180,6 +180,10 @@ def main():
         video_stream = cv2.VideoCapture(video_file)
         frame_number = 0
         
+        # Retrieve the video's FPS and calculate frame interval (in seconds)
+        video_fps = video_stream.get(cv2.CAP_PROP_FPS)
+        frame_interval = 1.0 / video_fps if video_fps > 0 else 0.033  # default to ~30 FPS
+        
         while True:
             loop_start = time.time()
             ret, frame = video_stream.read()
@@ -252,12 +256,19 @@ def main():
             # Log performance metrics to CSV file
             csv_writer.writerow([video_file, frame_number, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{fps:.2f}"])
             performance_log.flush()
+            
+            # --- ADDED: Delay to simulate the natural video frame rate ---
+            elapsed = time.time() - loop_start
+            delay = frame_interval - elapsed
+            if delay > 0:
+                time.sleep(delay)
         
         video_stream.release()
     
     cv2.destroyAllWindows()
     performance_log.close()
     print("[CV] All videos processed. Performance log saved.")
+
 
 if __name__ == '__main__':
     main()
