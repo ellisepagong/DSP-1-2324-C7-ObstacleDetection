@@ -166,7 +166,7 @@ def main():
     input_size = input_details[0]['shape'][1]
     print(f"[CV] Model input size: {input_size}x{input_size}")
     
-    # Start a thread to continuously print and log OUTPUT module logs from Arduino
+    # Start a thread to continuously log OUTPUT module messages from Arduino
     threading.Thread(target=read_from_output, daemon=True).start()
     
     # Skip handshake since the OUTPUT module now works in continuous mode.
@@ -180,19 +180,21 @@ def main():
         video_stream = cv2.VideoCapture(video_file)
         frame_number = 0
         
-        # Retrieve the video's FPS and calculate frame interval (in seconds)
+        # Retrieve the video's FPS and calculate the frame interval
         video_fps = video_stream.get(cv2.CAP_PROP_FPS)
-        frame_interval = 1.0 / video_fps if video_fps > 0 else 0.033  # default to ~30 FPS
+        if video_fps <= 0:
+            video_fps = 30  # Fallback if FPS cannot be determined
+        # Record simulation start time
+        sim_start_time = time.time()
         
         while True:
-            loop_start = time.time()
             ret, frame = video_stream.read()
             if not ret:
                 print(f"[CV] End of video: {video_file}")
                 break
             frame_number += 1
             
-            # Resize frame for display (and for segmentation calculations)
+            # Resize frame for display and segmentation calculations
             display_width = 720
             display_height = 480
             frame_disp = cv2.resize(frame, (display_width, display_height))
@@ -210,7 +212,7 @@ def main():
             output_data = interpreter.get_tensor(output_details[0]['index'])
             detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.5, iou_threshold=0.5)
             
-            # Calculate scaling factors to map from model input space to display space
+            # Calculate scaling factors from model input space to display space
             scale_x = display_width / input_size
             scale_y = display_height / input_size
             
@@ -220,8 +222,7 @@ def main():
             
             for detection in detections:
                 class_id, score, x1, y1, x2, y2 = detection
-                
-                # Scale detection coordinates to display image dimensions
+                # Scale detection coordinates to display dimensions
                 x1_disp = x1 * scale_x
                 y1_disp = y1 * scale_y
                 x2_disp = x2 * scale_x
@@ -248,18 +249,20 @@ def main():
                 performance_log.close()
                 return
             
-            loop_end = time.time()
-            total_processing_time = (loop_end - loop_start) * 1000  # in ms
-            fps = 1.0 / (loop_end - loop_start) if (loop_end - loop_start) > 0 else 0
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(loop_start))
-            
             # Log performance metrics to CSV file
-            csv_writer.writerow([video_file, frame_number, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{fps:.2f}"])
+            total_processing_time = (time.time() - inference_start) * 1000  # Approximation
+            # Calculate target timestamp based on video FPS
+            target_time = sim_start_time + (frame_number / video_fps)
+            # Format timestamp as simulation time
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(target_time))
+            # Calculate average FPS so far (optional)
+            avg_fps = frame_number / (time.time() - sim_start_time)
+            csv_writer.writerow([video_file, frame_number, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{avg_fps:.2f}"])
             performance_log.flush()
             
-            # --- ADDED: Delay to simulate the natural video frame rate ---
-            elapsed = time.time() - loop_start
-            delay = frame_interval - elapsed
+            # Synchronize with the video's natural timeline
+            current_time = time.time()
+            delay = target_time - current_time
             if delay > 0:
                 time.sleep(delay)
         
@@ -268,6 +271,7 @@ def main():
     cv2.destroyAllWindows()
     performance_log.close()
     print("[CV] All videos processed. Performance log saved.")
+
 
 
 if __name__ == '__main__':
