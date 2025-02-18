@@ -39,6 +39,10 @@ Timing Deliverables:
 -------------
 SO2: Logs the time (in ms) required to process sensor data (should be < 1000 ms for 90% of data).
 SO4: Logs the time (in ms) from receiving CV data to providing feedback (should be < 250 ms).
+
+ADDITION:
+-------------
+Overall Module Processing Time: Logs the total time from start to end of each loop iteration (sensor data acquisition, CV processing, and motor control logic).
 */
 
 #include <Wire.h>
@@ -401,6 +405,8 @@ void setup() {
 
 // ------------------ Loop ------------------
 void loop() {
+  unsigned long loopStart = millis(); // ADDED: Start overall processing timer
+  
   // --- Measure Sensor Data Processing Time (SO2) ---
   unsigned long sensorStart = millis();
   readToFSensors();
@@ -550,6 +556,12 @@ void loop() {
       }
     }
   }
+  
+  unsigned long loopEnd = millis();  // ADDED: End overall processing timer
+  unsigned long overallDuration = loopEnd - loopStart; // ADDED: Calculate overall processing time
+  Serial.print(F("[TIMING] [OVERALL] Module processing time: ")); // ADDED: Log overall processing time
+  Serial.print(overallDuration);
+  Serial.println(F(" ms."));
   
   delay(100);
 }
