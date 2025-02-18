@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from tflite_runtime.interpreter import Interpreter
 import serial
+import csv
 
 # Establish USB connection with Arduino (OUTPUT module)
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)  # Starts connection with Arduino
@@ -26,6 +27,11 @@ classes_dict = {
 max_width = 720  
 seg_size = max_width / 5
 
+# Open CSV file for performance logging
+performance_log = open("performance_log.csv", "w", newline="")
+csv_writer = csv.writer(performance_log)
+csv_writer.writerow(["Video", "Frame", "Timestamp", "CV_Inference_Time_ms", "Total_Processing_Time_ms", "FPS"])
+
 def handshake_with_output():
     # With continuous stream mode enabled on the OUTPUT module,
     # no handshake is needed. Simply return success.
@@ -33,15 +39,16 @@ def handshake_with_output():
     return True
 
 def read_from_output():
-    # Continuously read any log messages from OUTPUT module and print them
-    while True:
-        if arduino.in_waiting:
-            # Replace invalid bytes with the Unicode replacement character
-            line = arduino.readline().decode('utf-8', errors='replace').strip()
-            if line:
-                print("[OUTPUT LOG]", line)
-        time.sleep(0.1)
-
+    # Continuously read any log messages from OUTPUT module and write to file
+    with open("arduino_log.txt", "a") as log_file:
+        while True:
+            if arduino.in_waiting:
+                line = arduino.readline().decode('utf-8', errors='replace').strip()
+                if line:
+                    print("[OUTPUT LOG]", line)
+                    log_file.write(line + "\n")
+                    log_file.flush()
+            time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
     # Build a list of class IDs (or -1 for missing detections)
@@ -101,7 +108,7 @@ def non_max_suppression(detections, iou_threshold):
     for i in range(len(detections)):
         boxes.append([int(x1[i]), int(y1[i]), int(x2[i] - x1[i]), int(y2[i] - y1[i])])
     
-    indices = cv2.dnn.NMSBoxes(boxes, scores.tolist(), score_threshold=0.5, nms_threshold=iou_threshold)
+    indices = cv2.dnn.NMSBoxes(boxes, scores.tolist(), score_threshold=0.23, nms_threshold=iou_threshold)
     indices = indices.flatten() if len(indices) > 0 else []
     return [detections[i] for i in indices]
 
@@ -144,13 +151,10 @@ def process_detections(output_data, input_shape, conf_threshold=0.5, iou_thresho
     return detections
 
 def main():
-    # Desired display resolution for video (for segmentation purposes)
-    display_width = 720
-    display_height = 480
-
-    print("[CV] Starting video stream...")
-    video_stream = cv2.VideoCapture("testvid3.mp4")
+    # List of videos to run sequentially
+    video_files = ["testvid1.mp4", "testvid2.mp4", "testvid3.mp4"]
     
+    print("[CV] Starting video stream and performance logging...")
     # Load the TFLite model
     print("[CV] Loading TFLite model...")
     interpreter = Interpreter(model_path="model_float16.tflite")
@@ -162,7 +166,7 @@ def main():
     input_size = input_details[0]['shape'][1]
     print(f"[CV] Model input size: {input_size}x{input_size}")
     
-    # Start a thread to continuously print OUTPUT module logs
+    # Start a thread to continuously print and log OUTPUT module logs from Arduino
     threading.Thread(target=read_from_output, daemon=True).start()
     
     # Skip handshake since the OUTPUT module now works in continuous mode.
@@ -170,65 +174,90 @@ def main():
         print("[CV] Handshake failed, exiting.")
         return
 
-    print("[CV] Handshake complete, starting main loop.")
+    # Process each video file sequentially
+    for video_file in video_files:
+        print(f"[CV] Processing video: {video_file}")
+        video_stream = cv2.VideoCapture(video_file)
+        frame_number = 0
+        
+        while True:
+            loop_start = time.time()
+            ret, frame = video_stream.read()
+            if not ret:
+                print(f"[CV] End of video: {video_file}")
+                break
+            frame_number += 1
+            
+            # Resize frame for display (and for segmentation calculations)
+            display_width = 720
+            display_height = 480
+            frame_disp = cv2.resize(frame, (display_width, display_height))
+            
+            # Preprocess the display frame for model input
+            input_tensor = preprocess_input(frame_disp, input_size)
+            
+            # Measure CV model inference time
+            inference_start = time.time()
+            interpreter.set_tensor(input_details[0]['index'], input_tensor)
+            interpreter.invoke()
+            inference_end = time.time()
+            cv_inference_time = (inference_end - inference_start) * 1000  # in ms
+            
+            output_data = interpreter.get_tensor(output_details[0]['index'])
+            detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.5, iou_threshold=0.5)
+            
+            # Calculate scaling factors to map from model input space to display space
+            scale_x = display_width / input_size
+            scale_y = display_height / input_size
+            
+            # Prepare a dictionary to hold the largest detection per segment
+            largest_boxes = {i: None for i in range(5)}
+            largest_areas = {i: 0 for i in range(5)}
+            
+            for detection in detections:
+                class_id, score, x1, y1, x2, y2 = detection
+                
+                # Scale detection coordinates to display image dimensions
+                x1_disp = x1 * scale_x
+                y1_disp = y1 * scale_y
+                x2_disp = x2 * scale_x
+                y2_disp = y2 * scale_y
+                
+                area = (x2_disp - x1_disp) * (y2_disp - y1_disp)
+                if classes_dict[int(class_id)] == "pole":  # Adjust pole size
+                    area *= 0.3
+                
+                seg = assign_segment(x1_disp, x2_disp)
+                if area > largest_areas[seg]:
+                    largest_areas[seg] = area
+                    largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
+            
+            # Draw bounding boxes and labels on the display frame and send data to Arduino
+            display_pred(frame_disp, largest_boxes)
+            send_to_arduino(largest_boxes)
+            
+            cv2.imshow("Video", frame_disp)
+            if cv2.waitKey(10) == 27:  # Exit on pressing ESC
+                print("[CV] Exiting main loop.")
+                video_stream.release()
+                cv2.destroyAllWindows()
+                performance_log.close()
+                return
+            
+            loop_end = time.time()
+            total_processing_time = (loop_end - loop_start) * 1000  # in ms
+            fps = 1.0 / (loop_end - loop_start) if (loop_end - loop_start) > 0 else 0
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(loop_start))
+            
+            # Log performance metrics to CSV file
+            csv_writer.writerow([video_file, frame_number, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{fps:.2f}"])
+            performance_log.flush()
+        
+        video_stream.release()
     
-    while True:
-        ret, frame = video_stream.read()
-        if not ret:
-            print("[CV] Failed to grab frame.")
-            break
-        
-        # Resize frame for display (and for segmentation calculations)
-        frame_disp = cv2.resize(frame, (display_width, display_height))
-        
-        # Preprocess the display frame for model input
-        input_tensor = preprocess_input(frame_disp, input_size)
-        
-        # Run inference with TFLite
-        interpreter.set_tensor(input_details[0]['index'], input_tensor)
-        interpreter.invoke()
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        
-        # Process detections; detections will have coordinates relative to the model input size
-        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.21, iou_threshold=0.5)
-        
-        # Calculate scaling factors to map from model input space to display space
-        scale_x = display_width / input_size
-        scale_y = display_height / input_size
-        
-        # Prepare a dictionary to hold the largest detection per segment
-        largest_boxes = {i: None for i in range(5)}
-        largest_areas = {i: 0 for i in range(5)}
-        
-        for detection in detections:
-            class_id, score, x1, y1, x2, y2 = detection
-            
-            # Scale detection coordinates to display image dimensions
-            x1_disp = x1 * scale_x
-            y1_disp = y1 * scale_y
-            x2_disp = x2 * scale_x
-            y2_disp = y2 * scale_y
-            
-            area = (x2_disp - x1_disp) * (y2_disp - y1_disp)
-            if classes_dict[int(class_id)] == "pole":  # Adjust pole size
-                area *= 0.3
-            
-            seg = assign_segment(x1_disp, x2_disp)
-            if area > largest_areas[seg]:
-                largest_areas[seg] = area
-                largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
-        
-        # Draw bounding boxes and labels on the display frame
-        display_pred(frame_disp, largest_boxes)
-        send_to_arduino(largest_boxes)
-        
-        cv2.imshow("Video", frame_disp)
-        if cv2.waitKey(10) == 27:  # Exit on pressing ESC
-            print("[CV] Exiting main loop.")
-            break
-    
-    video_stream.release()
     cv2.destroyAllWindows()
+    performance_log.close()
+    print("[CV] All videos processed. Performance log saved.")
 
 if __name__ == '__main__':
     main()
