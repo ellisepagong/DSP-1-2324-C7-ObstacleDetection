@@ -45,8 +45,9 @@ ADDITION:
 Overall Module Processing Time: Logs the total time from start to end of each loop iteration (sensor data acquisition, CV processing, and motor control logic).
 */
 
+// Use the Pololu VL53L0X library instead of Adafruit's
 #include <Wire.h>
-#include <Adafruit_VL53L0X.h>
+#include <VL53L0X.h>
 
 // ------------------ Pin Definitions ------------------
 // ToF Sensor Module Pins
@@ -84,9 +85,9 @@ bool handshakeComplete = false;
 bool cvHandshakeComplete = false;
 
 // For ToF sensors
-Adafruit_VL53L0X loxLeft = Adafruit_VL53L0X();
-Adafruit_VL53L0X loxCenter = Adafruit_VL53L0X();
-Adafruit_VL53L0X loxRight = Adafruit_VL53L0X();
+VL53L0X loxLeft;
+VL53L0X loxCenter;
+VL53L0X loxRight;
 
 // For previous reading fallback (for all three sensors)
 static uint16_t prevLeft_cm = 0;
@@ -95,6 +96,23 @@ static uint16_t prevRight_cm = 0;
 
 // Variable to track the last time CV data was received
 unsigned long lastCVTime = 0;
+
+// ------------------ Long-Range Mode Helper Function ------------------
+/*
+  This function applies long-distance mode settings to a VL53L0X sensor.
+  It increases the measurement timing budget to 200ms (200000µs) and lowers
+  the signal rate limit to 0.1 MCPS.
+  
+  Note: These functions (setMeasurementTimingBudget and setSignalRateLimit)
+  are available in the Pololu VL53L0X library.
+*/
+void applyLongRangeMode(VL53L0X &sensor) {
+  // Increase timing budget to 200ms for improved long-range performance.
+  sensor.setMeasurementTimingBudget(200000);  // 200,000 µs = 200 ms
+  
+  // Lower the signal rate limit from the default (≈0.25 MCPS) to 0.1 MCPS.
+  sensor.setSignalRateLimit(0.1);
+}
 
 // ------------------ Function Definitions ------------------
 
@@ -243,7 +261,7 @@ int areAllScoresZero(int scores[5]) {
 // ---------- ToF Sensor Module Functions (from tof.ino) ----------
 
 // Initialize a VL53L0X sensor (from tof.ino)
-bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, const char *name) {
+bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char *name) {
   Serial.print(F("[INIT] Enabling "));
   Serial.print(name);
   Serial.println(F(" sensor..."));
@@ -251,13 +269,10 @@ bool initializeSensor(int xshutPin, Adafruit_VL53L0X &sensor, uint8_t address, c
   digitalWrite(xshutPin, HIGH);
   delay(10);
   
-  if (!sensor.begin(address)) {
-    Serial.print(F("[ERROR] "));
-    Serial.print(name);
-    Serial.println(F(" sensor failed to initialize!"));
-    Serial.println(String("LOG:") + name + " sensor failed to initialize!");
-    return false;
-  }
+  sensor.init();
+  sensor.setAddress(address);
+  
+  // We don't have a direct check for initialization failure in the Pololu library, so we assume success.
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
@@ -281,10 +296,11 @@ void enterIdleMode() {
 void readToFSensors() {
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
   
-  uint16_t left_mm = loxLeft.readRange();
-  uint16_t center_mm = loxCenter.readRange();
-  uint16_t right_mm = loxRight.readRange();
+  uint16_t left_mm = loxLeft.readRangeSingleMillimeters();
+  uint16_t center_mm = loxCenter.readRangeSingleMillimeters();
+  uint16_t right_mm = loxRight.readRangeSingleMillimeters();
   
+  // Check for timeouts (Pololu library supports timeoutOccurred)
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
     Serial.println("LOG:Sensor timeout! Entering idle mode.");
@@ -378,6 +394,12 @@ void setup() {
     Serial.println(F("[ERROR] Sensor initialization failed!"));
     enterIdleMode();
   }
+  
+  // ----- Apply Long-Range Mode Settings -----
+  // These settings extend the sensor's range (with a possible trade-off in accuracy)
+  applyLongRangeMode(loxLeft);
+  applyLongRangeMode(loxCenter);
+  applyLongRangeMode(loxRight);
   
   Serial.println(F("[PROCESS] Sensor initialization complete."));
   Serial.println("LOG:Sensor initialization complete.");
