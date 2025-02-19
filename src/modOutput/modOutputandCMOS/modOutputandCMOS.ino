@@ -528,7 +528,7 @@ void loop() {
       motorLogic(maxScoreId);
     }
     
-    // Prepare and send message via Bluetooth (HC-05 on Serial2)
+    // Prepare and send message via Bluetooth (HC-05 on Serial2) following the required format
     char scoresString[50] = "";
     for (int i = 0; i < 5; i++) {
       char temp[10];
@@ -538,10 +538,13 @@ void loop() {
         strcat(scoresString, ",");
       }
     }
-    String message = String("CV_DATA: ") + class_byte + ",SCORES:" + scoresString;
+    String message = class_byte; // Start with the CV class data string
+    message += ",";             // Append a comma
+    message += scoresString;    // Append the comma-separated scores
     Serial2.println(message);
     Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
     Serial.println(message);
+
     
     free(scores);
     
