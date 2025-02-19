@@ -37,13 +37,11 @@ If no new CV data is received within 3 seconds, the motor control logic disables
 
 Timing Deliverables:
 -------------
-SO2: Logs the time (in ms) required to process sensor data (should be < 1000 ms for 90% of data).
-SO4: Logs the time (in ms) from receiving CV data to providing feedback (should be < 250 ms).
-
-ADDITION:
--------------
-Overall Module Processing Time: Logs the total time from start to end of each loop iteration (sensor data acquisition, CV processing, and motor control logic).
-New: Logs the total processing time from the start of sensor data acquisition until the Bluetooth message is sent.
+[SO2] - Time (ms) to process sensor data.
+[BT] - Time (ms) for the Bluetooth send routine.
+[DATA_TO_BT] - Total time (ms) from sensor data acquisition start to Bluetooth message sent.
+[SO4] - Time (ms) from receiving CV data to providing feedback.
+[OVERALL] - Overall module processing time (ms) for one loop iteration.
 */
 
 #include <Wire.h>
@@ -434,9 +432,9 @@ void loop() {
   readToFSensors();
   unsigned long sensorEnd = millis();
   unsigned long sensorDuration = sensorEnd - sensorStart;
-  Serial.print(F("[TIMING] [SO2] Sensor data processed in "));
+  Serial.print(F("[TIMING] [SO2] "));
   Serial.print(sensorDuration);
-  Serial.println(F(" ms."));
+  Serial.println(F(" ms"));
   
   // --- Process incoming CV module data (via USB Serial) ---
   if (Serial.available() > 0) {
@@ -551,23 +549,23 @@ void loop() {
     // --- End timing for Bluetooth send ---
     unsigned long btEnd = millis();
     unsigned long btDuration = btEnd - btStart;
-    Serial.print(F("[TIMING] [BT] Bluetooth send routine took "));
+    Serial.print(F("[TIMING] [BT] "));
     Serial.print(btDuration);
-    Serial.println(F(" ms."));
+    Serial.println(F(" ms"));
     
     // --- Total time from sensor data acquisition start to Bluetooth message sent ---
     unsigned long dataToBtDuration = btEnd - loopStart;
-    Serial.print(F("[TIMING] [DATA_TO_BT] Total processing time from sensor read start to Bluetooth message sent: "));
+    Serial.print(F("[TIMING] [DATA_TO_BT] "));
     Serial.print(dataToBtDuration);
-    Serial.println(F(" ms."));
+    Serial.println(F(" ms"));
     
     free(scores);
     
     unsigned long cvEndTime = millis();
     unsigned long cvDuration = cvEndTime - cvStartTime;
-    Serial.print(F("[TIMING] [SO4] CV data processed and feedback provided in "));
+    Serial.print(F("[TIMING] [SO4] "));
     Serial.print(cvDuration);
-    Serial.println(F(" ms."));
+    Serial.println(F(" ms"));
   }
   
   // --- Stopping Mechanism: If no new CV data for 3 seconds, stop motors ---
@@ -599,9 +597,9 @@ void loop() {
   
   unsigned long loopEnd = millis();  // ADDED: End overall processing timer
   unsigned long overallDuration = loopEnd - loopStart; // ADDED: Calculate overall processing time
-  Serial.print(F("[TIMING] [OVERALL] Module processing time: "));
+  Serial.print(F("[TIMING] [OVERALL] "));
   Serial.print(overallDuration);
-  Serial.println(F(" ms."));
+  Serial.println(F(" ms"));
   
   delay(100);
 }
