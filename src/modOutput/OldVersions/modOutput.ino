@@ -238,7 +238,7 @@ void loop() {
       // Append the scores string to the existing string
       message += ",";       // Add a comma to separate from the existing string
       message += scoresString;  // Append the scores string
-//       message += "\n"; // append new line
+      // message += "\n"; // append new line
       hc05.println(message);// Send the message to HC-05
     }
   }

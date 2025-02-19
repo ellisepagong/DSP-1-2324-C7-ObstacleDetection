@@ -542,6 +542,7 @@ void loop() {
     message += ",";             // Append a comma
     message += scoresString;    // Append the comma-separated scores
     Serial2.println(message);
+
     Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
     Serial.println(message);
 
