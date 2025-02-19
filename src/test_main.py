@@ -39,6 +39,11 @@ performance_log = open("performance_log.csv", "w", newline="")
 csv_writer = csv.writer(performance_log)
 csv_writer.writerow(["Video", "Inference_Count", "Timestamp", "CV_Inference_Time_ms", "Total_Processing_Time_ms", "Avg_FPS"])
 
+# Open CSV file for Bluetooth performance logging
+bt_performance_log = open("bt_performance_log.csv", "w", newline="")
+bt_csv_writer = csv.writer(bt_performance_log)
+bt_csv_writer.writerow(["Timestamp", "BT_Message_Time_ms"])
+
 def handshake_with_output():
     print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
     return True
@@ -53,6 +58,16 @@ def read_from_output():
                     print("[OUTPUT LOG]", line)
                     log_file.write(line + "\n")
                     log_file.flush()
+                    # Check if this is the BT timing log
+                    if "[TIMING] [BT]" in line:
+                        # Expected format: "[TIMING] [BT] Bluetooth send routine took X ms."
+                        parts = line.split(" ")
+                        try:
+                            bt_time = parts[6]  # Extract the numeric value (e.g., "5")
+                            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                            bt_csv_writer.writerow([timestamp, bt_time])
+                        except Exception as e:
+                            print("Error parsing BT timing:", e)
             time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
@@ -211,7 +226,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(sim_start_time + elapsed))
         total_processing_time = (current_time - inference_start) * 1000  # approximate
         avg_fps = inference_count / elapsed if elapsed > 0 else 0
-        csv_writer.writerow([video_file, inference_count, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{avg_fps:.2f}"])
+        csv_writer.writerow([video_file, inference_count, timestamp, f"{cv_inference_time:.2f}", f"{total_Processing_Time:.2f}", f"{avg_fps:.2f}"])
         performance_log.flush()
         
         # Yield briefly so the thread doesn't hog the CPU
@@ -260,6 +275,7 @@ def main():
     
     cv2.destroyAllWindows()
     performance_log.close()
+    bt_performance_log.close()
     print("[CV] All videos processed. Performance log saved.")
 
 if __name__ == '__main__':
