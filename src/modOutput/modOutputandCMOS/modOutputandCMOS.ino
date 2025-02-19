@@ -43,9 +43,9 @@ SO4: Logs the time (in ms) from receiving CV data to providing feedback (should 
 ADDITION:
 -------------
 Overall Module Processing Time: Logs the total time from start to end of each loop iteration (sensor data acquisition, CV processing, and motor control logic).
+New: Logs the total processing time from the start of sensor data acquisition until the Bluetooth message is sent.
 */
 
-// Use the Pololu VL53L0X library instead of Adafruit's
 #include <Wire.h>
 #include <VL53L0X.h>
 
@@ -427,7 +427,7 @@ void setup() {
 
 // ------------------ Loop ------------------
 void loop() {
-  unsigned long loopStart = millis(); // ADDED: Start overall processing timer
+  unsigned long loopStart = millis(); // ADDED: Start overall processing timer (sensor data acquisition start)
   
   // --- Measure Sensor Data Processing Time (SO2) ---
   unsigned long sensorStart = millis();
@@ -528,6 +528,9 @@ void loop() {
       motorLogic(maxScoreId);
     }
     
+    // --- Start timing for Bluetooth send (from sensor data acquisition start) ---
+    unsigned long btStart = millis();
+    
     // Prepare and send message via Bluetooth (HC-05 on Serial2) following the required format
     char scoresString[50] = "";
     for (int i = 0; i < 5; i++) {
@@ -542,10 +545,21 @@ void loop() {
     message += ",";             // Append a comma
     message += scoresString;    // Append the comma-separated scores
     Serial2.println(message);
-
     Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
     Serial.println(message);
-
+    
+    // --- End timing for Bluetooth send ---
+    unsigned long btEnd = millis();
+    unsigned long btDuration = btEnd - btStart;
+    Serial.print(F("[TIMING] [BT] Bluetooth send routine took "));
+    Serial.print(btDuration);
+    Serial.println(F(" ms."));
+    
+    // --- Total time from sensor data acquisition start to Bluetooth message sent ---
+    unsigned long dataToBtDuration = btEnd - loopStart;
+    Serial.print(F("[TIMING] [DATA_TO_BT] Total processing time from sensor read start to Bluetooth message sent: "));
+    Serial.print(dataToBtDuration);
+    Serial.println(F(" ms."));
     
     free(scores);
     
@@ -585,7 +599,7 @@ void loop() {
   
   unsigned long loopEnd = millis();  // ADDED: End overall processing timer
   unsigned long overallDuration = loopEnd - loopStart; // ADDED: Calculate overall processing time
-  Serial.print(F("[TIMING] [OVERALL] Module processing time: ")); // ADDED: Log overall processing time
+  Serial.print(F("[TIMING] [OVERALL] Module processing time: "));
   Serial.print(overallDuration);
   Serial.println(F(" ms."));
   
