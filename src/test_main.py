@@ -5,6 +5,7 @@ import numpy as np
 from tflite_runtime.interpreter import Interpreter
 import serial
 import csv
+import re
 
 # Establish USB connection with Arduino (OUTPUT module)
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
@@ -34,21 +35,23 @@ latest_frame = None
 frame_lock = threading.Lock()
 running = True  # Used to signal threads to stop
 
-# Open CSV file for performance logging
+# Open CSV file for performance logging (for inference metrics)
 performance_log = open("performance_log.csv", "w", newline="")
 csv_writer = csv.writer(performance_log)
 csv_writer.writerow(["Video", "Inference_Count", "Timestamp", "CV_Inference_Time_ms", "Total_Processing_Time_ms", "Avg_FPS"])
 
-# Open CSV file for Bluetooth performance logging
-bt_performance_log = open("bt_performance_log.csv", "w", newline="")
-bt_csv_writer = csv.writer(bt_performance_log)
-bt_csv_writer.writerow(["Timestamp", "BT_Message_Time_ms"])
+# Open CSV file for Arduino timing performance logging (each timing tag recorded individually)
+arduino_timing_log = open("arduino_timing.csv", "w", newline="")
+arduino_csv_writer = csv.writer(arduino_timing_log)
+arduino_csv_writer.writerow(["Timestamp", "Timing_Tag", "Time_ms"])
 
 def handshake_with_output():
     print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
     return True
 
 def read_from_output():
+    # This regex will capture the tag inside [TIMING] and the numeric time (in ms)
+    pattern = re.compile(r"\[TIMING\] \[([^\]]+)\].*? (\d+)\s*ms\.")
     # Continuously read any log messages from the OUTPUT module and write to file
     with open("arduino_log.txt", "a") as log_file:
         while True:
@@ -58,16 +61,14 @@ def read_from_output():
                     print("[OUTPUT LOG]", line)
                     log_file.write(line + "\n")
                     log_file.flush()
-                    # Check if this is the BT timing log
-                    if "[TIMING] [BT]" in line:
-                        # Expected format: "[TIMING] [BT] Bluetooth send routine took X ms."
-                        parts = line.split(" ")
-                        try:
-                            bt_time = parts[6]  # Extract the numeric value (e.g., "5")
+                    # Check if this is a timing log from Arduino
+                    if "[TIMING]" in line:
+                        match = pattern.search(line)
+                        if match:
+                            tag = match.group(1)
+                            time_ms = match.group(2)
                             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                            bt_csv_writer.writerow([timestamp, bt_time])
-                        except Exception as e:
-                            print("Error parsing BT timing:", e)
+                            arduino_csv_writer.writerow([timestamp, tag, time_ms])
             time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
@@ -226,7 +227,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(sim_start_time + elapsed))
         total_processing_time = (current_time - inference_start) * 1000  # approximate
         avg_fps = inference_count / elapsed if elapsed > 0 else 0
-        csv_writer.writerow([video_file, inference_count, timestamp, f"{cv_inference_time:.2f}", f"{total_Processing_Time:.2f}", f"{avg_fps:.2f}"])
+        csv_writer.writerow([video_file, inference_count, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{avg_fps:.2f}"])
         performance_log.flush()
         
         # Yield briefly so the thread doesn't hog the CPU
@@ -275,7 +276,7 @@ def main():
     
     cv2.destroyAllWindows()
     performance_log.close()
-    bt_performance_log.close()
+    arduino_timing_log.close()
     print("[CV] All videos processed. Performance log saved.")
 
 if __name__ == '__main__':
