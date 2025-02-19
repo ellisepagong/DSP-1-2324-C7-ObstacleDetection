@@ -40,19 +40,17 @@ performance_log = open("performance_log.csv", "w", newline="")
 csv_writer = csv.writer(performance_log)
 csv_writer.writerow(["Video", "Inference_Count", "Timestamp", "CV_Inference_Time_ms", "Total_Processing_Time_ms", "Avg_FPS"])
 
-# Open CSV file for Arduino timing performance logging (each timing tag recorded individually)
+# Open CSV file for Arduino timing performance logging (each timing line recorded in full)
 arduino_timing_log = open("arduino_timing.csv", "w", newline="")
 arduino_csv_writer = csv.writer(arduino_timing_log)
-arduino_csv_writer.writerow(["Timestamp", "Timing_Tag", "Time_ms"])
+arduino_csv_writer.writerow(["Timestamp", "Timing_Line"])
 
 def handshake_with_output():
     print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
     return True
 
 def read_from_output():
-    # This regex will capture the tag inside [TIMING] and the numeric time (in ms)
-    pattern = re.compile(r"\[TIMING\] \[([^\]]+)\].*? (\d+)\s*ms\.")
-    # Continuously read any log messages from the OUTPUT module and write to file
+    # Instead of parsing the timing message, record the entire line if it contains "[TIMING]"
     with open("arduino_log.txt", "a") as log_file:
         while True:
             if arduino.in_waiting:
@@ -61,14 +59,11 @@ def read_from_output():
                     print("[OUTPUT LOG]", line)
                     log_file.write(line + "\n")
                     log_file.flush()
-                    # Check if this is a timing log from Arduino
                     if "[TIMING]" in line:
-                        match = pattern.search(line)
-                        if match:
-                            tag = match.group(1)
-                            time_ms = match.group(2)
-                            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                            arduino_csv_writer.writerow([timestamp, tag, time_ms])
+                        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                        # Write the whole timing line to the CSV
+                        arduino_csv_writer.writerow([timestamp, line])
+                        arduino_timing_log.flush()
             time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
