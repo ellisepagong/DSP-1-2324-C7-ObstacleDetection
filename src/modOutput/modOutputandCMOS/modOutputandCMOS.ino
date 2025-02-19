@@ -553,7 +553,7 @@ void loop() {
   }
   
   // --- Stopping Mechanism: If no new CV data for 3 seconds, stop motors ---
-  if (millis() - lastCVTime >= 3000) {
+  if (millis() - lastCVTime >= 2000) {
     Serial.println(F("[OUTPUT LOG] [MOTOR] No new CV data for 3 seconds. Stopping motors."));
     motorLogic(-1);
   }
