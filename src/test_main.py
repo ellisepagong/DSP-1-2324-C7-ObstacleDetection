@@ -146,7 +146,7 @@ def process_detections(output_data, input_shape, conf_threshold=0.5, iou_thresho
             y2 = y_center + height / 2
             detections.append([class_id, score, x1, y1, x2, y2])
     
-    detections = non_max_suppression(detections, iou_threshold)
+    
     return detections
 
 # --- Video Playback Thread ---
