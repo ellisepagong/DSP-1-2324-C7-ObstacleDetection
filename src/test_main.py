@@ -123,7 +123,7 @@ def non_max_suppression(detections, iou_threshold):
     indices = indices.flatten() if len(indices) > 0 else []
     return [detections[i] for i in indices]
 
-def process_detections(output_data, input_shape, conf_threshold=0.5, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.23, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     
@@ -145,7 +145,6 @@ def process_detections(output_data, input_shape, conf_threshold=0.5, iou_thresho
             x2 = x_center + width / 2
             y2 = y_center + height / 2
             detections.append([class_id, score, x1, y1, x2, y2])
-    
     
     return detections
 
