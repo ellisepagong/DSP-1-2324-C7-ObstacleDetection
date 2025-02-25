@@ -124,7 +124,6 @@ def process_detections(output_data, input_shape, conf_threshold=0.23, iou_thresh
             y2 = y_center + height / 2
             detections.append([class_id, score, x1, y1, x2, y2])
     
-    detections = non_max_suppression(detections, iou_threshold)
     return detections
 
 def main():
