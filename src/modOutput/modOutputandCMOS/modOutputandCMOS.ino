@@ -491,15 +491,6 @@ void loop() {
     */
     String class_byte = Serial.readStringUntil('\n');
     class_byte.trim();
-    // Check for message framing markers
-    if (class_byte.startsWith("<MSG>") && class_byte.endsWith("</MSG>")) {
-      class_byte = class_byte.substring(5, class_byte.length() - 6);
-    } else {
-      /* DISABLED: Transmission to RPi5
-      Serial.println(F("[OUTPUT LOG] [ERROR] Invalid message framing."));
-      */
-      return;
-    }
     /* DISABLED: Transmission to RPi5
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
