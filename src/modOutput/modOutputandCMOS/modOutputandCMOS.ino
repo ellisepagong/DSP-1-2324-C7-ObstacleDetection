@@ -118,20 +118,15 @@ void applyLongRangeMode(VL53L0X &sensor) {
 
 // Handshake procedure for sensor module (adjusted for combined code)
 void handshakeProcedure() {
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Entering continuous sensor stream mode..."));
-  */
+  // In combined mode, sensor data is read directly, so no flushing required.
   handshakeComplete = true;
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Continuous sensor stream mode enabled."));
-  */
 }
 
 // CV handshake procedure (from modOutput.ino)
 void cvHandshakeProcedure() {
-  /* DISABLED: Transmission to RPi5
   Serial.println("[OUTPUT LOG] [HANDSHAKE][CV] Disabling handshake for CV module. Continuous mode enabled.");
-  */
   cvHandshakeComplete = true;
 }
 
@@ -167,7 +162,6 @@ int* getWeights(int classes[5], int distance[3]) {
         score += 5;
       }
       scores[i] = score;
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
       Serial.print(i);
       Serial.print(F(" => current: "));
@@ -182,22 +176,17 @@ int* getWeights(int classes[5], int distance[3]) {
       Serial.print(dir_w);
       Serial.print(F(", score: "));
       Serial.println(score);
-      */
     }
     else if (current == -1) {
       scores[i] = 0;
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
       Serial.print(i);
       Serial.println(F(" has no class (-1). Score set to 0."));
-      */
     } else {
       scores[i] = -1;
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
       Serial.print(i);
       Serial.println(F(" invalid. Score set to -1."));
-      */
     }
   }
   return scores;
@@ -205,10 +194,8 @@ int* getWeights(int classes[5], int distance[3]) {
 
 // Motor control logic (from modOutput.ino)
 void motorLogic(int segment) {
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[OUTPUT LOG] [MOTOR] Activating motor logic for segment: "));
   Serial.println(segment);
-  */
   switch (segment) {
     case 0: // left
       digitalWrite(motorPins[0], HIGH);
@@ -273,31 +260,28 @@ int areAllScoresZero(int scores[5]) {
 
 // Initialize a VL53L0X sensor (from tof.ino)
 bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char *name) {
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[INIT] Enabling "));
   Serial.print(name);
   Serial.println(F(" sensor..."));
-  */
+  
   digitalWrite(xshutPin, HIGH);
   delay(10);
+  
   sensor.init();
   sensor.setAddress(address);
+  
   // We don't have a direct check for initialization failure in the Pololu library, so we assume success.
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
   Serial.println(String("LOG:") + name + " sensor initialized.");
-  */
   return true;
 }
 
 // Enter idle mode in case of sensor failure (from tof.ino)
 void enterIdleMode() {
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[IDLE MODE] Entering idle mode..."));
   Serial.println("LOG:Entering idle mode due to sensor failure.");
-  */
   while (true) {
     digitalWrite(LED_IDLE, HIGH);
     delay(150);
@@ -308,9 +292,7 @@ void enterIdleMode() {
 
 // Read sensor data from VL53L0X sensors and update lastToFSensorData
 void readToFSensors() {
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
-  */
   
   uint16_t left_mm = loxLeft.readRangeSingleMillimeters();
   uint16_t center_mm = loxCenter.readRangeSingleMillimeters();
@@ -318,10 +300,8 @@ void readToFSensors() {
   
   // Check for timeouts (Pololu library supports timeoutOccurred)
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
     Serial.println("LOG:Sensor timeout! Entering idle mode.");
-    */
     enterIdleMode();
   }
   
@@ -330,9 +310,7 @@ void readToFSensors() {
   // For left sensor: if reading is 400cm or more, use previous value
   if ((left_mm / 10) >= 400) {
     left_cm = prevLeft_cm;
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
-    */
   } else {
     left_cm = left_mm / 10;
     prevLeft_cm = left_cm;
@@ -341,9 +319,7 @@ void readToFSensors() {
   // For center sensor:
   if ((center_mm / 10) >= 400) {
     center_cm = prevCenter_cm;
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
-    */
   } else {
     center_cm = center_mm / 10;
     prevCenter_cm = center_cm;
@@ -352,15 +328,12 @@ void readToFSensors() {
   // For right sensor:
   if ((right_mm / 10) >= 400) {
     right_cm = prevRight_cm;
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
-    */
   } else {
     right_cm = right_mm / 10;
     prevRight_cm = right_cm;
   }
   
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[SENSOR DATA] Left: "));
   Serial.print(left_cm);
   Serial.print(F(" cm, Center: "));
@@ -368,15 +341,27 @@ void readToFSensors() {
   Serial.print(F(" cm, Right: "));
   Serial.print(right_cm);
   Serial.println(F(" cm"));
-  */
   
   // Update global sensor data string (format: "left center right")
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
-  /* DISABLED: Transmission to RPi5
   Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
   Serial.print(F("[PROCESS] Updated sensor data: "));
   Serial.println(lastToFSensorData);
-  */
+}
+
+// Global variable to store the latest complete CV message
+String latestCVData = "";
+void updateCVData() {
+  // Check if there is any serial data available
+  while (Serial.available() > 0) {
+    // Read one complete message from the serial buffer
+    String temp = Serial.readStringUntil('\n');
+    if (temp.length() > 0) {
+      // Overwrite the latestCVData with the new message,
+      // ensuring that only the most recent message is stored.
+      latestCVData = temp;
+    }
+  }
 }
 
 // ------------------ Setup ------------------
@@ -398,9 +383,7 @@ void setup() {
   // Begin Serial2 for Bluetooth (HC-05)
   Serial2.begin(9600);
   
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[OUTPUT LOG] [PROCESS] Starting Combined Module Initialization (Mega 2560)..."));
-  */
   
   // Initialize I2C for ToF sensors
   Wire.begin();
@@ -421,9 +404,7 @@ void setup() {
   bool rightStatus = initializeSensor(PIN_XSHUT_RIGHT, loxRight, 0x32, "Right");
   
   if (!leftStatus || !centerStatus || !rightStatus) {
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[ERROR] Sensor initialization failed!"));
-    */
     enterIdleMode();
   }
   
@@ -433,35 +414,25 @@ void setup() {
   applyLongRangeMode(loxCenter);
   applyLongRangeMode(loxRight);
   
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[PROCESS] Sensor initialization complete."));
   Serial.println("LOG:Sensor initialization complete.");
-  */
   
   // Handshake procedures
   handshakeProcedure();
   while (!handshakeComplete) {
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Retrying handshake in 1 second..."));
-    */
     delay(1000);
     handshakeProcedure();
   }
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Handshake complete with sensor module."));
-  */
   
   cvHandshakeProcedure();
   while (!cvHandshakeComplete) {
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Retrying handshake with CV module in 1 second..."));
-    */
     delay(1000);
     cvHandshakeProcedure();
   }
-  /* DISABLED: Transmission to RPi5
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
-  */
   
   // Initialize last CV data time to current time
   lastCVTime = millis();
@@ -471,30 +442,27 @@ void setup() {
 void loop() {
   unsigned long loopStart = millis(); // ADDED: Start overall processing timer (sensor data acquisition start)
   
+  updateCVData();
+
   // --- Measure Sensor Data Processing Time (SO2) ---
   unsigned long sensorStart = millis();
   readToFSensors();
   unsigned long sensorEnd = millis();
   unsigned long sensorDuration = sensorEnd - sensorStart;
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[TIMING] [SO2] "));
   Serial.print(sensorDuration);
   Serial.println(F(" ms"));
-  */
   
   // --- Process incoming CV module data (via USB Serial) ---
   if (Serial.available() > 0) {
     unsigned long cvStartTime = millis(); // Start timing for CV data processing
     lastCVTime = millis(); // Update timestamp when new CV data is received
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[OUTPUT LOG] [INFO] Data detected on USB Serial (CV module)."));
-    */
-    String class_byte = Serial.readStringUntil('\n');
+    String class_byte = latestCVData;
+    latestCVData = "";
     class_byte.trim();
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
-    */
     
     // Parse CV data into an array of 5 integers
     int classes[5];
@@ -503,37 +471,29 @@ void loop() {
     while (spaceIndex_class >= 0 && idx_class < 5) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
       Serial.print(idx_class - 1);
       Serial.print(F("]: "));
       Serial.println(classStr);
-      */
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
     if (idx_class < 5) {
       classes[idx_class++] = class_byte.toInt();
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
       Serial.print(idx_class - 1);
       Serial.print(F("]: "));
       Serial.println(class_byte);
-      */
     }
     
     // Ensure we have valid sensor data from ToF sensors
     if (lastToFSensorData.length() == 0) {
-      /* DISABLED: Transmission to RPi5
       Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
-      */
       return;
     }
     String dis_byte = lastToFSensorData;
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[OUTPUT LOG] [HANDSHAKE] Using latest sensor distance data: "));
     Serial.println(dis_byte);
-    */
     
     // Parse the distance data (expecting three space-separated values)
     int dis[3];
@@ -542,31 +502,25 @@ void loop() {
     while (spaceIndex_dis >= 0 && idx_dis < 3) {
       String disStr = dis_byte.substring(0, spaceIndex_dis);
       dis[idx_dis++] = disStr.toInt();
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
       Serial.print(idx_dis - 1);
       Serial.print(F("]: "));
       Serial.println(disStr);
-      */
       dis_byte = dis_byte.substring(spaceIndex_dis + 1);
       spaceIndex_dis = dis_byte.indexOf(' ');
     }
     if (idx_dis < 3) {
       dis[idx_dis++] = dis_byte.toInt();
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
       Serial.print(idx_dis - 1);
       Serial.print(F("]: "));
       Serial.println(dis_byte);
-      */
     }
     
     // Compute scores using the parsed CV classes and sensor distances
     int* scores = getWeights(classes, dis);
     if (scores == NULL) {
-      /* DISABLED: Transmission to RPi5
       Serial.println(F("[OUTPUT LOG] [HANDSHAKE] Memory allocation failed."));
-      */
       return;
     }
     
@@ -574,9 +528,7 @@ void loop() {
     int maxScore = 0;
     int maxScoreId = 0;
     if (areAllScoresZero(scores)) {
-      /* DISABLED: Transmission to RPi5
       Serial.println(F("[OUTPUT LOG] [MOTOR] All scores are zero. Executing default motor logic."));
-      */
       motorLogic(-1);
     } else {
       for (int i = 1; i < 5; i++) {
@@ -585,12 +537,10 @@ void loop() {
           maxScoreId = i;
         }
       }
-      /* DISABLED: Transmission to RPi5
       Serial.print(F("[OUTPUT LOG] [MOTOR] Highest score is "));
       Serial.print(maxScore);
       Serial.print(F(" at index "));
       Serial.println(maxScoreId);
-      */
       motorLogic(maxScoreId);
     }
     
@@ -611,44 +561,34 @@ void loop() {
     message += ",";             // Append a comma
     message += scoresString;    // Append the comma-separated scores
     Serial2.println(message);
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
     Serial.println(message);
-    */
     
     // --- End timing for Bluetooth send ---
     unsigned long btEnd = millis();
     unsigned long btDuration = btEnd - btStart;
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[TIMING] [BT] "));
     Serial.print(btDuration);
     Serial.println(F(" ms"));
-    */
     
     // --- Total time from sensor data acquisition start to Bluetooth message sent ---
     unsigned long dataToBtDuration = btEnd - loopStart;
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[TIMING] [DATA_TO_BT] "));
     Serial.print(dataToBtDuration);
     Serial.println(F(" ms"));
-    */
     
     free(scores);
     
     unsigned long cvEndTime = millis();
     unsigned long cvDuration = cvEndTime - cvStartTime;
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[TIMING] [SO4] "));
     Serial.print(cvDuration);
     Serial.println(F(" ms"));
-    */
   }
   
   // --- Stopping Mechanism: If no new CV data for 3 seconds, stop motors ---
   if (millis() - lastCVTime >= 2000) {
-    /* DISABLED: Transmission to RPi5
     Serial.println(F("[OUTPUT LOG] [MOTOR] No new CV data for 3 seconds. Stopping motors."));
-    */
     motorLogic(-1);
   }
   
@@ -656,14 +596,10 @@ void loop() {
   if (Serial2.available()) {
     String receivedData = Serial2.readStringUntil('\n');
     receivedData.trim();
-    /* DISABLED: Transmission to RPi5
     Serial.print(F("[OUTPUT LOG] [HC-05] Received: "));
     Serial.println(receivedData);
-    */
     if (receivedData == "motors") {
-      /* DISABLED: Transmission to RPi5
       Serial.println(F("[OUTPUT LOG] [MOTOR] Received 'motors' command from HC-05."));
-      */
       for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 6; j++) {
           digitalWrite(motorPins[j], HIGH);
@@ -679,11 +615,9 @@ void loop() {
   
   unsigned long loopEnd = millis();  // ADDED: End overall processing timer
   unsigned long overallDuration = loopEnd - loopStart; // ADDED: Calculate overall processing time
-  /* DISABLED: Transmission to RPi5
   Serial.print(F("[TIMING] [OVERALL] "));
   Serial.print(overallDuration);
   Serial.println(F(" ms"));
-  */
   
   delay(100);
 }
