@@ -9,6 +9,8 @@ import re
 
 # Establish USB connection with Arduino (OUTPUT module)
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
+time.sleep(3)  # Wait 3 seconds for Arduino to reset
+
 
 # Class dictionary (must match your model’s class order)
 classes_dict = {
