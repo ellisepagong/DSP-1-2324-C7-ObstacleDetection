@@ -9,6 +9,7 @@ import re
 
 # Establish USB connection with Arduino (OUTPUT module)
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
+time.sleep(3)  # Wait 3 seconds for Arduino to reset
 
 # Class dictionary (must match your model’s class order)
 classes_dict = {
@@ -72,9 +73,10 @@ def send_to_arduino(largest_boxes):
         int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
     ]
-    message = " ".join(map(str, classes_message)) + "\n"
+    message_body = " ".join(map(str, classes_message))
+    message = "<MSG>" + message_body + "</MSG>\n"
     arduino.write(message.encode())
-    print("[CV] Sent to OUTPUT:", message.strip())
+    print("[CV] Sent to OUTPUT:", message_body)
 
 def display_pred(img, largest_boxes):
     for data in largest_boxes.values():
