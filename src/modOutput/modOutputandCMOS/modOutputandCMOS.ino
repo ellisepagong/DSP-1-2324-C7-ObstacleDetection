@@ -96,19 +96,8 @@ static uint16_t prevRight_cm = 0;
 unsigned long lastCVTime = 0;
 
 // ------------------ Long-Range Mode Helper Function ------------------
-/*
-  This function applies long-distance mode settings to a VL53L0X sensor.
-  It increases the measurement timing budget to 200ms (200000µs) and lowers
-  the signal rate limit to 0.1 MCPS.
-  
-  Note: These functions (setMeasurementTimingBudget and setSignalRateLimit)
-  are available in the Pololu VL53L0X library.
-*/
 void applyLongRangeMode(VL53L0X &sensor) {
-  // Increase timing budget to 200ms for improved long-range performance.
   sensor.setMeasurementTimingBudget(200000);  // 200,000 µs = 200 ms
-  
-  // Lower the signal rate limit from the default (≈0.25 MCPS) to 0.1 MCPS.
   sensor.setSignalRateLimit(0.1);
 }
 
@@ -116,21 +105,17 @@ void applyLongRangeMode(VL53L0X &sensor) {
 
 // ---------- Output Module Functions (from modOutput.ino) ----------
 
-// Handshake procedure for sensor module (adjusted for combined code)
 void handshakeProcedure() {
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Entering continuous sensor stream mode..."));
-  // In combined mode, sensor data is read directly, so no flushing required.
   handshakeComplete = true;
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Continuous sensor stream mode enabled."));
 }
 
-// CV handshake procedure (from modOutput.ino)
 void cvHandshakeProcedure() {
   Serial.println("[OUTPUT LOG] [HANDSHAKE][CV] Disabling handshake for CV module. Continuous mode enabled.");
   cvHandshakeComplete = true;
 }
 
-// Compute weights based on CV classes and sensor distances (from modOutput.ino)
 int* getWeights(int classes[5], int distance[3]) {
   int* scores = (int*)malloc(5 * sizeof(int));
   if (scores == NULL) {
@@ -192,7 +177,6 @@ int* getWeights(int classes[5], int distance[3]) {
   return scores;
 }
 
-// Motor control logic (from modOutput.ino)
 void motorLogic(int segment) {
   Serial.print(F("[OUTPUT LOG] [MOTOR] Activating motor logic for segment: "));
   Serial.println(segment);
@@ -238,7 +222,6 @@ void motorLogic(int segment) {
       digitalWrite(motorPins[5], HIGH);
       break;
     default:
-      // Turn off all motor pins
       for (int i = 0; i < 6; i++) {
         digitalWrite(motorPins[i], LOW);
       }
@@ -246,7 +229,6 @@ void motorLogic(int segment) {
   }
 }
 
-// Check if all scores are zero (from modOutput.ino)
 int areAllScoresZero(int scores[5]) {
   for (int i = 0; i < 5; i++) {
     if (scores[i] != 0) {
@@ -256,9 +238,7 @@ int areAllScoresZero(int scores[5]) {
   return 1;
 }
 
-// ---------- ToF Sensor Module Functions (from tof.ino) ----------
-
-// Initialize a VL53L0X sensor (from tof.ino)
+// ---------- ToF Sensor Module Functions ----------
 bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char *name) {
   Serial.print(F("[INIT] Enabling "));
   Serial.print(name);
@@ -270,7 +250,6 @@ bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char
   sensor.init();
   sensor.setAddress(address);
   
-  // We don't have a direct check for initialization failure in the Pololu library, so we assume success.
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
@@ -278,7 +257,6 @@ bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char
   return true;
 }
 
-// Enter idle mode in case of sensor failure (from tof.ino)
 void enterIdleMode() {
   Serial.println(F("[IDLE MODE] Entering idle mode..."));
   Serial.println("LOG:Entering idle mode due to sensor failure.");
@@ -290,7 +268,6 @@ void enterIdleMode() {
   }
 }
 
-// Read sensor data from VL53L0X sensors and update lastToFSensorData
 void readToFSensors() {
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
   
@@ -298,7 +275,6 @@ void readToFSensors() {
   uint16_t center_mm = loxCenter.readRangeSingleMillimeters();
   uint16_t right_mm = loxRight.readRangeSingleMillimeters();
   
-  // Check for timeouts (Pololu library supports timeoutOccurred)
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
     Serial.println("LOG:Sensor timeout! Entering idle mode.");
@@ -307,7 +283,6 @@ void readToFSensors() {
   
   uint16_t left_cm, center_cm, right_cm;
   
-  // For left sensor: if reading is 400cm or more, use previous value
   if ((left_mm / 10) >= 400) {
     left_cm = prevLeft_cm;
     Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
@@ -316,7 +291,6 @@ void readToFSensors() {
     prevLeft_cm = left_cm;
   }
   
-  // For center sensor:
   if ((center_mm / 10) >= 400) {
     center_cm = prevCenter_cm;
     Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
@@ -325,7 +299,6 @@ void readToFSensors() {
     prevCenter_cm = center_cm;
   }
   
-  // For right sensor:
   if ((right_mm / 10) >= 400) {
     right_cm = prevRight_cm;
     Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
@@ -342,7 +315,6 @@ void readToFSensors() {
   Serial.print(right_cm);
   Serial.println(F(" cm"));
   
-  // Update global sensor data string (format: "left center right")
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
   Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
   Serial.print(F("[PROCESS] Updated sensor data: "));
@@ -351,29 +323,23 @@ void readToFSensors() {
 
 // ------------------ Setup ------------------
 void setup() {
-  // Initialize motor pins
   for (int i = 0; i < 6; i++) {
     pinMode(motorPins[i], OUTPUT);
     digitalWrite(motorPins[i], LOW);
   }
   
-  // Initialize LED for idle mode
   pinMode(LED_IDLE, OUTPUT);
   digitalWrite(LED_IDLE, LOW);
   
-  // Begin Serial for CV module (Raspberry Pi) - USB Serial
   Serial.begin(9600);
   while (!Serial) { ; }
   
-  // Begin Serial2 for Bluetooth (HC-05)
   Serial2.begin(9600);
   
   Serial.println(F("[OUTPUT LOG] [PROCESS] Starting Combined Module Initialization (Mega 2560)..."));
   
-  // Initialize I2C for ToF sensors
   Wire.begin();
   
-  // Initialize ToF sensor XSHUT pins
   pinMode(PIN_XSHUT_LEFT, OUTPUT);
   pinMode(PIN_XSHUT_CENTER, OUTPUT);
   pinMode(PIN_XSHUT_RIGHT, OUTPUT);
@@ -383,7 +349,6 @@ void setup() {
   digitalWrite(PIN_XSHUT_RIGHT, LOW);
   delay(10);
   
-  // Initialize ToF sensors
   bool leftStatus = initializeSensor(PIN_XSHUT_LEFT, loxLeft, 0x30, "Left");
   bool centerStatus = initializeSensor(PIN_XSHUT_CENTER, loxCenter, 0x31, "Center");
   bool rightStatus = initializeSensor(PIN_XSHUT_RIGHT, loxRight, 0x32, "Right");
@@ -393,8 +358,6 @@ void setup() {
     enterIdleMode();
   }
   
-  // ----- Apply Long-Range Mode Settings -----
-  // These settings extend the sensor's range (with a possible trade-off in accuracy)
   applyLongRangeMode(loxLeft);
   applyLongRangeMode(loxCenter);
   applyLongRangeMode(loxRight);
@@ -402,7 +365,6 @@ void setup() {
   Serial.println(F("[PROCESS] Sensor initialization complete."));
   Serial.println("LOG:Sensor initialization complete.");
   
-  // Handshake procedures
   handshakeProcedure();
   while (!handshakeComplete) {
     Serial.println(F("[OUTPUT LOG] [HANDSHAKE][SENSOR] Retrying handshake in 1 second..."));
@@ -419,13 +381,12 @@ void setup() {
   }
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
   
-  // Initialize last CV data time to current time
   lastCVTime = millis();
 }
 
 // ------------------ Loop ------------------
 void loop() {
-  unsigned long loopStart = millis(); // ADDED: Start overall processing timer (sensor data acquisition start)
+  unsigned long loopStart = millis(); // Start overall processing timer
   
   // --- Measure Sensor Data Processing Time (SO2) ---
   unsigned long sensorStart = millis();
@@ -443,6 +404,13 @@ void loop() {
     Serial.println(F("[OUTPUT LOG] [INFO] Data detected on USB Serial (CV module)."));
     String class_byte = Serial.readStringUntil('\n');
     class_byte.trim();
+    // Check for message framing markers
+    if (class_byte.startsWith("<MSG>") && class_byte.endsWith("</MSG>")) {
+      class_byte = class_byte.substring(5, class_byte.length() - 6);
+    } else {
+      Serial.println(F("[OUTPUT LOG] [ERROR] Invalid message framing."));
+      return;
+    }
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
     
@@ -529,7 +497,7 @@ void loop() {
     // --- Start timing for Bluetooth send (from sensor data acquisition start) ---
     unsigned long btStart = millis();
     
-    // Prepare and send message via Bluetooth (HC-05 on Serial2) following the required format
+    // Prepare and send message via Bluetooth (HC-05 on Serial2)
     char scoresString[50] = "";
     for (int i = 0; i < 5; i++) {
       char temp[10];
@@ -540,20 +508,18 @@ void loop() {
       }
     }
     String message = class_byte; // Start with the CV class data string
-    message += ",";             // Append a comma
-    message += scoresString;    // Append the comma-separated scores
+    message += ",";
+    message += scoresString;
     Serial2.println(message);
     Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
     Serial.println(message);
     
-    // --- End timing for Bluetooth send ---
     unsigned long btEnd = millis();
     unsigned long btDuration = btEnd - btStart;
     Serial.print(F("[TIMING] [BT] "));
     Serial.print(btDuration);
     Serial.println(F(" ms"));
     
-    // --- Total time from sensor data acquisition start to Bluetooth message sent ---
     unsigned long dataToBtDuration = btEnd - loopStart;
     Serial.print(F("[TIMING] [DATA_TO_BT] "));
     Serial.print(dataToBtDuration);
@@ -595,8 +561,8 @@ void loop() {
     }
   }
   
-  unsigned long loopEnd = millis();  // ADDED: End overall processing timer
-  unsigned long overallDuration = loopEnd - loopStart; // ADDED: Calculate overall processing time
+  unsigned long loopEnd = millis();  // End overall processing timer
+  unsigned long overallDuration = loopEnd - loopStart;
   Serial.print(F("[TIMING] [OVERALL] "));
   Serial.print(overallDuration);
   Serial.println(F(" ms"));
