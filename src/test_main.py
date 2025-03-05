@@ -279,6 +279,10 @@ def main():
         # Signal inference thread to stop after video ends
         running = False
         inference_thread.join()
+
+        # Destroy any OpenCV windows before moving on
+        cv2.destroyAllWindows();
+        time.sleep(0.1);  # Optional: a small delay to ensure cleanup
     
     cv2.destroyAllWindows()
     performance_log.close()
