@@ -163,20 +163,20 @@ int* getWeights(int classes[5], int distance[3]) {
         score += 5;
       }
       scores[i] = score;
-      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
-      Serial.print(i);
-      Serial.print(F(" => current: "));
-      Serial.print(current);
-      Serial.print(F(", base_w: "));
-      Serial.print(base_w);
-      Serial.print(F(", distance: "));
-      Serial.print(dis);
-      Serial.print(F(", dis_w: "));
-      Serial.print(dis_w);
-      Serial.print(F(", dir_w: "));
-      Serial.print(dir_w);
-      Serial.print(F(", score: "));
-      Serial.println(score);
+      // Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      // Serial.print(i);
+      // Serial.print(F(" => current: "));
+      // Serial.print(current);
+      // Serial.print(F(", base_w: "));
+      // Serial.print(base_w);
+      // Serial.print(F(", distance: "));
+      // Serial.print(dis);
+      // Serial.print(F(", dis_w: "));
+      // Serial.print(dis_w);
+      // Serial.print(F(", dir_w: "));
+      // Serial.print(dir_w);
+      // Serial.print(F(", score: "));
+      // Serial.println(score);
     }
     else if (current == -1) {
       scores[i] = 0;
@@ -438,19 +438,19 @@ void loop() {
     while (spaceIndex_class >= 0 && idx_class < 5) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
-      Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
-      Serial.print(idx_class - 1);
-      Serial.print(F("]: "));
-      Serial.println(classStr);
+      // Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
+      // Serial.print(idx_class - 1);
+      // Serial.print(F("]: "));
+      // Serial.println(classStr);
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
     if (idx_class < 5) {
       classes[idx_class++] = class_byte.toInt();
-      Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
-      Serial.print(idx_class - 1);
-      Serial.print(F("]: "));
-      Serial.println(class_byte);
+      // Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
+      // Serial.print(idx_class - 1);
+      // Serial.print(F("]: "));
+      // Serial.println(class_byte);
     }
 
     // Build a comma-separated string from the parsed classes
@@ -480,19 +480,19 @@ void loop() {
     while (spaceIndex_dis >= 0 && idx_dis < 3) {
       String disStr = dis_byte.substring(0, spaceIndex_dis);
       dis[idx_dis++] = disStr.toInt();
-      Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
-      Serial.print(idx_dis - 1);
-      Serial.print(F("]: "));
-      Serial.println(disStr);
+      // Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
+      // Serial.print(idx_dis - 1);
+      // Serial.print(F("]: "));
+      // Serial.println(disStr);
       dis_byte = dis_byte.substring(spaceIndex_dis + 1);
       spaceIndex_dis = dis_byte.indexOf(' ');
     }
     if (idx_dis < 3) {
       dis[idx_dis++] = dis_byte.toInt();
-      Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
-      Serial.print(idx_dis - 1);
-      Serial.print(F("]: "));
-      Serial.println(dis_byte);
+      // Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
+      // Serial.print(idx_dis - 1);
+      // Serial.print(F("]: "));
+      // Serial.println(dis_byte);
     }
     
     // Compute weights
