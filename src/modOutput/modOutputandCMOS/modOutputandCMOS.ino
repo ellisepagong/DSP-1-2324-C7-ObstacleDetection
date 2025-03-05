@@ -180,14 +180,14 @@ int* getWeights(int classes[5], int distance[3]) {
     }
     else if (current == -1) {
       scores[i] = 0;
-      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
-      Serial.print(i);
-      Serial.println(F(" has no class (-1). Score set to 0."));
+      // Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      // Serial.print(i);
+      // Serial.println(F(" has no class (-1). Score set to 0."));
     } else {
       scores[i] = -1;
-      Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
-      Serial.print(i);
-      Serial.println(F(" invalid. Score set to -1."));
+      // Serial.print(F("[OUTPUT LOG] [WEIGHTS] Class index "));
+      // Serial.print(i);
+      // Serial.println(F(" invalid. Score set to -1."));
     }
   }
   return scores;
@@ -195,8 +195,8 @@ int* getWeights(int classes[5], int distance[3]) {
 
 // Motor control logic
 void motorLogic(int segment) {
-  Serial.print(F("[OUTPUT LOG] [MOTOR] Activating motor logic for segment: "));
-  Serial.println(segment);
+  // Serial.print(F("[OUTPUT LOG] [MOTOR] Activating motor logic for segment: "));
+  // Serial.println(segment);
   switch (segment) {
     case 0:
       digitalWrite(motorPins[0], HIGH); digitalWrite(motorPins[1], HIGH);
@@ -280,38 +280,38 @@ void readToFSensors() {
   uint16_t left_cm, center_cm, right_cm;
   if ((left_mm / 10) >= 400) {
     left_cm = prevLeft_cm;
-    Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
+    // Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
   } else {
     left_cm = left_mm / 10;
     prevLeft_cm = left_cm;
   }
   if ((center_mm / 10) >= 400) {
     center_cm = prevCenter_cm;
-    Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
+    // Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
   } else {
     center_cm = center_mm / 10;
     prevCenter_cm = center_cm;
   }
   if ((right_mm / 10) >= 400) {
     right_cm = prevRight_cm;
-    Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
+    // Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
   } else {
     right_cm = right_mm / 10;
     prevRight_cm = right_cm;
   }
   
-  Serial.print(F("[SENSOR DATA] Left: "));
-  Serial.print(left_cm);
-  Serial.print(F(" cm, Center: "));
-  Serial.print(center_cm);
-  Serial.print(F(" cm, Right: "));
-  Serial.print(right_cm);
-  Serial.println(F(" cm"));
+  // Serial.print(F("[SENSOR DATA] Left: "));
+  // Serial.print(left_cm);
+  // Serial.print(F(" cm, Center: "));
+  // Serial.print(center_cm);
+  // Serial.print(F(" cm, Right: "));
+  // Serial.print(right_cm);
+  // Serial.println(F(" cm"));
   
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
-  Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
-  Serial.print(F("[PROCESS] Updated sensor data: "));
-  Serial.println(lastToFSensorData);
+  // Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
+  // Serial.print(F("[PROCESS] Updated sensor data: "));
+  // Serial.println(lastToFSensorData);
 }
 
 // ---------- CV Data Update Function with Extra Logs ----------
@@ -327,7 +327,13 @@ void updateCVData() {
       Serial.print(temp);
       Serial.println("'");
       if (temp.length() > 0) {
-        // Here, instead of appending, we always overwrite with the newest message
+        // If there is already a message stored, log that it's being replaced.
+        if (latestCVData.length() > 0) {
+          Serial.print("[DEBUG] Deleting previous message: '");
+          Serial.print(latestCVData);
+          Serial.println("'");
+        }
+        // Overwrite with the newest message
         latestCVData = temp;
         Serial.print("[DEBUG] latestCVData updated to: '");
         Serial.print(latestCVData);
@@ -338,6 +344,7 @@ void updateCVData() {
     Serial.println("[DEBUG] --- End Serial Buffer Dump ---");
   }
 }
+
 
 // ------------------ Setup ------------------
 void setup() {
@@ -404,8 +411,8 @@ void loop() {
   unsigned long loopStart = millis();
   
   // Drain Serial buffer and update latest CV data
-  Serial.println("[OM_CV_REQUEST]");
   updateCVData();
+  Serial.println("[OM_CV_REQUEST]");
   
   
   // --- Measure Sensor Data Processing Time (SO2) ---
@@ -466,12 +473,12 @@ void loop() {
     
     // Check sensor data is available
     if (lastToFSensorData.length() == 0) {
-      Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
+      // Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
       return;
     }
     String dis_byte = lastToFSensorData;
-    Serial.print(F("[OUTPUT LOG] [HANDSHAKE] Using latest sensor distance data: "));
-    Serial.println(dis_byte);
+    // Serial.print(F("[OUTPUT LOG] [HANDSHAKE] Using latest sensor distance data: "));
+    // Serial.println(dis_byte);
     
     // Parse sensor distances
     int dis[3];
