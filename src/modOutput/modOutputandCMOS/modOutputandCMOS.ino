@@ -428,8 +428,7 @@ void loop() {
     class_byte.trim();
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
-    String message = class_byte; // The trimmed CV data string
-    
+
     // Parse CV data into an array of 5 integers
     int classes[5];
     int idx_class = 0;
@@ -451,6 +450,17 @@ void loop() {
       Serial.print(F("]: "));
       Serial.println(class_byte);
     }
+
+    // Build a comma-separated string from the parsed classes
+    String formattedCVData = "";
+    for (int i = 0; i < 5; i++) {
+      formattedCVData += String(classes[i]);
+      if (i < 4) {
+        formattedCVData += ",";
+      }
+    }
+  // Use the formatted CV data for the outgoing message
+  String message = formattedCVData;
     
     // Check sensor data is available
     if (lastToFSensorData.length() == 0) {
