@@ -28,7 +28,7 @@ classes_dict = {
 
 # Display configuration
 display_width = 720  
-display_height = 480
+display_height = 720
 max_width = 720  
 seg_size = max_width / 5
 
@@ -167,12 +167,14 @@ def video_playback(video_file):
             break
         with frame_lock:
             latest_frame = frame.copy()
-        # Display the video normally
+        # Display the video frame
         cv2.imshow("Video", frame)
         if cv2.waitKey(int(delay * 1000)) == 27:
             running = False
             break
     cap.release()
+    cv2.destroyWindow("Video")  
+
 
 # --- CV Inference Thread ---
 def cv_inference_worker(interpreter, input_details, output_details, input_size, csv_writer, video_file, sim_start_time):
@@ -243,7 +245,7 @@ def main():
     global running, latest_frame
     # Initialize TFLite model
     print("[CV] Loading TFLite model...")
-    interpreter = Interpreter(model_path="model_float16.tflite")
+    interpreter = Interpreter(model_path="model_float16_480x480.tflite")
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
