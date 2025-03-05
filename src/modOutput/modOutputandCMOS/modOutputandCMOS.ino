@@ -317,8 +317,8 @@ void readToFSensors() {
 // ---------- CV Data Update Function with Extra Logs ----------
 void updateCVData() {
   int bytesAvailable = Serial.available();
-  Serial.print("[DEBUG] Bytes available in Serial buffer: ");
-  Serial.println(bytesAvailable);
+  // Serial.print("[DEBUG] Bytes available in Serial buffer: ");
+  // Serial.println(bytesAvailable);
   if (bytesAvailable > 0) {
     Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
     while (Serial.available() > 0) {
@@ -410,12 +410,15 @@ void setup() {
 void loop() {
   unsigned long loopStart = millis();
   
-  // Drain Serial buffer and update latest CV data
-  updateCVData();
+  // 1. Clear stale Serial data from the CV module
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+  
+  // 2. Send the CV request signal so that CV module sends its latest inference
   Serial.println("[OM_CV_REQUEST]");
   
-  
-  // --- Measure Sensor Data Processing Time (SO2) ---
+  // 3. Gather sensor data
   unsigned long sensorStart = millis();
   readToFSensors();
   unsigned long sensorEnd = millis();
@@ -424,7 +427,13 @@ void loop() {
   Serial.print(sensorDuration);
   Serial.println(F(" ms"));
   
-  // --- Process CV Data if Available ---
+  // 4. Wait for new CV data (block until fresh data arrives or timeout after 2500 ms)
+  unsigned long waitStart = millis();
+  while (latestCVData.length() == 0 && (millis() - waitStart < 2500)) {
+    updateCVData();
+  }
+  
+  // 5. If new CV data is available, process it
   if (latestCVData.length() > 0) {
     unsigned long cvStartTime = millis();
     lastCVTime = millis();
@@ -438,26 +447,18 @@ void loop() {
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
 
-    // Parse CV data into an array of 5 integers
+    // --- Parse the CV message into an array of 5 integers ---
     int classes[5];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
     while (spaceIndex_class >= 0 && idx_class < 5) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
-      // Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
-      // Serial.print(idx_class - 1);
-      // Serial.print(F("]: "));
-      // Serial.println(classStr);
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
     if (idx_class < 5) {
       classes[idx_class++] = class_byte.toInt();
-      // Serial.print(F("[OUTPUT LOG] [DATA][CV] Parsed class["));
-      // Serial.print(idx_class - 1);
-      // Serial.print(F("]: "));
-      // Serial.println(class_byte);
     }
 
     // Build a comma-separated string from the parsed classes
@@ -468,41 +469,30 @@ void loop() {
         formattedCVData += ",";
       }
     }
-  // Use the formatted CV data for the outgoing message
-  String message = formattedCVData;
+    String message = formattedCVData;
     
-    // Check sensor data is available
+    // 6. Ensure sensor data is available
     if (lastToFSensorData.length() == 0) {
-      // Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
+      Serial.println(F("[OUTPUT LOG] [HANDSHAKE] No sensor distance data available."));
       return;
     }
     String dis_byte = lastToFSensorData;
-    // Serial.print(F("[OUTPUT LOG] [HANDSHAKE] Using latest sensor distance data: "));
-    // Serial.println(dis_byte);
     
-    // Parse sensor distances
+    // Parse sensor distances (for left, front, and right sensors)
     int dis[3];
     int idx_dis = 0;
     int spaceIndex_dis = dis_byte.indexOf(' ');
     while (spaceIndex_dis >= 0 && idx_dis < 3) {
       String disStr = dis_byte.substring(0, spaceIndex_dis);
       dis[idx_dis++] = disStr.toInt();
-      // Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
-      // Serial.print(idx_dis - 1);
-      // Serial.print(F("]: "));
-      // Serial.println(disStr);
       dis_byte = dis_byte.substring(spaceIndex_dis + 1);
       spaceIndex_dis = dis_byte.indexOf(' ');
     }
     if (idx_dis < 3) {
       dis[idx_dis++] = dis_byte.toInt();
-      // Serial.print(F("[OUTPUT LOG] [SENSOR] Parsed distance["));
-      // Serial.print(idx_dis - 1);
-      // Serial.print(F("]: "));
-      // Serial.println(dis_byte);
     }
     
-    // Compute weights
+    // Compute weights and choose motor activation based on CV classes and sensor distances.
     int* scores = getWeights(classes, dis);
     if (scores == NULL) {
       Serial.println(F("[OUTPUT LOG] [HANDSHAKE] Memory allocation failed."));
@@ -540,7 +530,6 @@ void loop() {
         strcat(scoresString, ",");
       }
     }
-    
     message += ",";
     message += scoresString;
     Serial2.println(message);
@@ -567,14 +556,14 @@ void loop() {
     Serial.println(F(" ms"));
   }
   
-  // If no new CV data for 3 seconds, stop motors.
+  // 7. If no new CV data for 3 seconds, stop motors.
   if (millis() - lastCVTime >= 3000) {
     Serial.println(F("[OUTPUT LOG] [MOTOR] No new CV data for 3 seconds. Stopping motors."));
     Serial2.println("Error_1");
     motorLogic(-1);
   }
   
-  // Process HC-05 commands (if any)
+  // 8. Process HC-05 commands (if any)
   if (Serial2.available()) {
     String receivedData = Serial2.readStringUntil('\n');
     receivedData.trim();
@@ -603,3 +592,4 @@ void loop() {
   
   delay(100);
 }
+
