@@ -428,6 +428,7 @@ void loop() {
     class_byte.trim();
     Serial.print(F("[OUTPUT LOG] [DATA][CV] Received CV data: "));
     Serial.println(class_byte);
+    String message = class_byte; // The trimmed CV data string
     
     // Parse CV data into an array of 5 integers
     int classes[5];
@@ -520,7 +521,7 @@ void loop() {
         strcat(scoresString, ",");
       }
     }
-    String message = class_byte; // The trimmed CV data string
+    
     message += ",";
     message += scoresString;
     Serial2.println(message);
