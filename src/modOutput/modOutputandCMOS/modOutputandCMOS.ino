@@ -320,24 +320,24 @@ void updateCVData() {
   // Serial.print("[DEBUG] Bytes available in Serial buffer: ");
   // Serial.println(bytesAvailable);
   if (bytesAvailable > 0) {
-    Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
+    // Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
     while (Serial.available() > 0) {
-      String temp = Serial.readStringUntil('\n');
-      Serial.print("[DEBUG] Raw CV message read: '");
-      Serial.print(temp);
-      Serial.println("'");
+      // String temp = Serial.readStringUntil('\n');
+      // Serial.print("[DEBUG] Raw CV message read: '");
+      // Serial.print(temp);
+      // Serial.println("'");
       if (temp.length() > 0) {
         // If there is already a message stored, log that it's being replaced.
         if (latestCVData.length() > 0) {
-          Serial.print("[DEBUG] Deleting previous message: '");
-          Serial.print(latestCVData);
-          Serial.println("'");
+          // Serial.print("[DEBUG] Deleting previous message: '");
+          // Serial.print(latestCVData);
+          // Serial.println("'");
         }
         // Overwrite with the newest message
         latestCVData = temp;
-        Serial.print("[DEBUG] latestCVData updated to: '");
-        Serial.print(latestCVData);
-        Serial.println("'");
+        // Serial.print("[DEBUG] latestCVData updated to: '");
+        // Serial.print(latestCVData);
+        // Serial.println("'");
         lastCVTime = millis();
       }
     }
