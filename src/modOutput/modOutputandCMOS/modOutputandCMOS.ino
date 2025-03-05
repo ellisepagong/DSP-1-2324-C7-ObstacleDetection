@@ -404,7 +404,9 @@ void loop() {
   unsigned long loopStart = millis();
   
   // Drain Serial buffer and update latest CV data
+  Serial.println("[OM_CV_REQUEST]");
   updateCVData();
+  
   
   // --- Measure Sensor Data Processing Time (SO2) ---
   unsigned long sensorStart = millis();
