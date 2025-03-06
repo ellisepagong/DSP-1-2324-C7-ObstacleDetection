@@ -435,6 +435,7 @@ void loop() {
   
   // 5. If new CV data is available, process it
   if (latestCVData.length() > 0) {
+    Error_1_sent = true;
     unsigned long cvStartTime = millis();
     lastCVTime = millis();
     
@@ -559,7 +560,10 @@ void loop() {
   // 7. If no new CV data for 3 seconds, stop motors.
   if (millis() - lastCVTime >= 3000) {
     Serial.println(F("[OUTPUT LOG] [MOTOR] No new CV data for 3 seconds. Stopping motors."));
-    Serial2.println("Error_1");
+    if (Error_1_sent == false){
+      Serial2.println("Error_1");
+      Error_1_sent = true;
+    }
     motorLogic(-1);
   }
   
