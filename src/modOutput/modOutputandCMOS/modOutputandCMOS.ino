@@ -61,6 +61,7 @@ const int motorPins[] = {8, 9, 10, 11, 12, 13};
 
 // ------------------ Global Variables ------------------
 String lastToFSensorData = ""; // Latest sensor data as string (e.g., "left center right")
+bool Error_1_sent = false;
 
 // Weights array for class scores (index corresponds to class value offset by 1)
 const int weights[] = {
@@ -322,7 +323,7 @@ void updateCVData() {
   if (bytesAvailable > 0) {
     // Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
     while (Serial.available() > 0) {
-      // String temp = Serial.readStringUntil('\n');
+      String temp = Serial.readStringUntil('\n');
       // Serial.print("[DEBUG] Raw CV message read: '");
       // Serial.print(temp);
       // Serial.println("'");
@@ -435,7 +436,7 @@ void loop() {
   
   // 5. If new CV data is available, process it
   if (latestCVData.length() > 0) {
-    Error_1_sent = true;
+    Error_1_sent = false;
     unsigned long cvStartTime = millis();
     lastCVTime = millis();
     
