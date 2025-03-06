@@ -300,13 +300,13 @@ void readToFSensors() {
     prevRight_cm = right_cm;
   }
   
-  // Serial.print(F("[SENSOR DATA] Left: "));
-  // Serial.print(left_cm);
-  // Serial.print(F(" cm, Center: "));
-  // Serial.print(center_cm);
-  // Serial.print(F(" cm, Right: "));
-  // Serial.print(right_cm);
-  // Serial.println(F(" cm"));
+  Serial.print(F("[SENSOR DATA] Left: "));
+  Serial.print(left_cm);
+  Serial.print(F(" cm, Center: "));
+  Serial.print(center_cm);
+  Serial.print(F(" cm, Right: "));
+  Serial.print(right_cm);
+  Serial.println(F(" cm"));
   
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
   // Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
@@ -317,8 +317,8 @@ void readToFSensors() {
 // ---------- CV Data Update Function with Extra Logs ----------
 void updateCVData() {
   int bytesAvailable = Serial.available();
-  // Serial.print("[DEBUG] Bytes available in Serial buffer: ");
-  // Serial.println(bytesAvailable);
+  Serial.print("[DEBUG] Bytes available in Serial buffer: ");
+  Serial.println(bytesAvailable);
   if (bytesAvailable > 0) {
     // Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
     while (Serial.available() > 0) {
@@ -341,7 +341,7 @@ void updateCVData() {
         lastCVTime = millis();
       }
     }
-    Serial.println("[DEBUG] --- End Serial Buffer Dump ---");
+    // Serial.println("[DEBUG] --- End Serial Buffer Dump ---");
   }
 }
 
