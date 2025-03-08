@@ -430,7 +430,7 @@ void loop() {
   
   // 4. Wait for new CV data (block until fresh data arrives or timeout after 1400 ms)
   unsigned long waitStart = millis();
-  while (latestCVData.length() == 0 && (millis() - waitStart < 1500)) {
+  while (latestCVData.length() == 0 && (millis() - waitStart < 1400)) {
     updateCVData();
   }
   
