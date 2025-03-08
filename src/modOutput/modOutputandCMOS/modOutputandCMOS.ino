@@ -318,8 +318,8 @@ void readToFSensors() {
 // ---------- CV Data Update Function with Extra Logs ----------
 void updateCVData() {
   int bytesAvailable = Serial.available();
-  Serial.print("[DEBUG] Bytes available in Serial buffer: ");
-  Serial.println(bytesAvailable);
+  // Serial.print("[DEBUG] Bytes available in Serial buffer: ");
+  // Serial.println(bytesAvailable);
   if (bytesAvailable > 0) {
     // Serial.println("[DEBUG] --- Begin Serial Buffer Dump ---");
     while (Serial.available() > 0) {
@@ -428,9 +428,9 @@ void loop() {
   Serial.print(sensorDuration);
   Serial.println(F(" ms"));
   
-  // 4. Wait for new CV data (block until fresh data arrives or timeout after 2500 ms)
+  // 4. Wait for new CV data (block until fresh data arrives or timeout after 1400 ms)
   unsigned long waitStart = millis();
-  while (latestCVData.length() == 0 && (millis() - waitStart < 2500)) {
+  while (latestCVData.length() == 0 && (millis() - waitStart < 1500)) {
     updateCVData();
   }
   
