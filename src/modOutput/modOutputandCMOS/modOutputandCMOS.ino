@@ -108,10 +108,10 @@ String latestCVData = "";
 */
 void applyLongRangeMode(VL53L0X &sensor) {
   // Increase timing budget to 200ms for improved long-range performance.
-  sensor.setMeasurementTimingBudget(200000);  // 200,000 µs = 200 ms
+  sensor.setMeasurementTimingBudget(20000);  // 20,000 µs = 20 ms
   
   // Lower the signal rate limit from the default (≈0.25 MCPS) to 0.1 MCPS.
-  sensor.setSignalRateLimit(0.1);
+  // sensor.setSignalRateLimit(0.1);
 }
 
 // ------------------ Function Definitions ------------------
@@ -279,26 +279,23 @@ void readToFSensors() {
   }
   
   uint16_t left_cm, center_cm, right_cm;
-  if ((left_mm / 10) >= 400) {
-    left_cm = prevLeft_cm;
-    // Serial.println(F("[PROCESS] Left sensor reading >= 400cm. Using previous reading."));
+  if ((left_mm / 10) >= 200) {
+    left_cm = 0;
+    Serial.println(F("[=====SENSOR DATA=====][PROCESS] Left sensor reading >= 200cm. Resetting to zero."));
   } else {
-    left_cm = left_mm / 10;
-    prevLeft_cm = left_cm;
+    left_cm = left_mm;
   }
-  if ((center_mm / 10) >= 400) {
-    center_cm = prevCenter_cm;
-    // Serial.println(F("[PROCESS] Center sensor reading >= 400cm. Using previous reading."));
+  if ((center_mm / 10) >= 200) {
+    center_cm = 0;
+    Serial.println(F("[=====SENSOR DATA=====][PROCESS] Center sensor reading >= 200cm. Resetting to zero."));
   } else {
-    center_cm = center_mm / 10;
-    prevCenter_cm = center_cm;
+    center_cm = center_mm;
   }
-  if ((right_mm / 10) >= 400) {
-    right_cm = prevRight_cm;
-    // Serial.println(F("[PROCESS] Right sensor reading >= 400cm. Using previous reading."));
+  if ((right_mm / 10) >= 200) {
+    right_cm = 0;
+    Serial.println(F("[=====SENSOR DATA=====][PROCESS] Right sensor reading >= 200cm. Resetting to zero."));
   } else {
     right_cm = right_mm / 10;
-    prevRight_cm = right_cm;
   }
   
   Serial.print(F("[SENSOR DATA] Left: "));
