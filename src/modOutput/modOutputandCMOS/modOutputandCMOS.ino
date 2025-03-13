@@ -515,44 +515,45 @@ void loop() {
       Serial.print(maxScore);
       Serial.print(F(" at index "));
       Serial.println(maxScoreId);
+      // --- Bluetooth send timing ---
+      unsigned long btStart = millis();
+      char scoresString[50] = "";
+      for (int i = 0; i < 5; i++) {
+        char temp[10];
+        sprintf(temp, "%d", scores[i]);
+        strcat(scoresString, temp);
+        if (i < 4) {
+          strcat(scoresString, ",");
+        }
+      }
+      message += ",";
+      message += scoresString;
+      Serial2.println(message);
+      Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
+      Serial.println(message);
+      
+      unsigned long btEnd = millis();
+      unsigned long btDuration = btEnd - btStart;
+      Serial.print(F("[TIMING] [BT] "));
+      Serial.print(btDuration);
+      Serial.println(F(" ms"));
+      
+      unsigned long dataToBtDuration = btEnd - loopStart;
+      Serial.print(F("[TIMING] [DATA_TO_BT] "));
+      Serial.print(dataToBtDuration);
+      Serial.println(F(" ms"));
+      
+      free(scores);
+      
+      unsigned long cvEndTime = millis();
+      unsigned long cvDuration = cvEndTime - cvStartTime;
+      Serial.print(F("[TIMING] [SO4] "));
+      Serial.print(cvDuration);
+      Serial.println(F(" ms"));
       motorLogic(maxScoreId);
     }
     
-    // --- Bluetooth send timing ---
-    unsigned long btStart = millis();
-    char scoresString[50] = "";
-    for (int i = 0; i < 5; i++) {
-      char temp[10];
-      sprintf(temp, "%d", scores[i]);
-      strcat(scoresString, temp);
-      if (i < 4) {
-        strcat(scoresString, ",");
-      }
-    }
-    message += ",";
-    message += scoresString;
-    Serial2.println(message);
-    Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
-    Serial.println(message);
     
-    unsigned long btEnd = millis();
-    unsigned long btDuration = btEnd - btStart;
-    Serial.print(F("[TIMING] [BT] "));
-    Serial.print(btDuration);
-    Serial.println(F(" ms"));
-    
-    unsigned long dataToBtDuration = btEnd - loopStart;
-    Serial.print(F("[TIMING] [DATA_TO_BT] "));
-    Serial.print(dataToBtDuration);
-    Serial.println(F(" ms"));
-    
-    free(scores);
-    
-    unsigned long cvEndTime = millis();
-    unsigned long cvDuration = cvEndTime - cvStartTime;
-    Serial.print(F("[TIMING] [SO4] "));
-    Serial.print(cvDuration);
-    Serial.println(F(" ms"));
   }
   
   // 7. If no new CV data for 3 seconds, stop motors.
