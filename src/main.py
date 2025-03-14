@@ -12,6 +12,7 @@ from picamera2 import Picamera2
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
 time.sleep(3)  # Wait 3 seconds for Arduino to reset
 
+
 # Class dictionary (must match your model’s class order)
 classes_dict = {
     0: 'animal',
@@ -25,6 +26,7 @@ classes_dict = {
     8: 'stall',
     9: 'vehicle'
 }
+
 
 # Display configuration
 display_width = 720  
@@ -48,10 +50,12 @@ arduino_csv_writer = csv.writer(arduino_timing_log)
 arduino_csv_writer.writerow(["Timestamp", "Timing_Line"])
 
 def handshake_with_output():
+
     print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
     return True
 
 def read_from_output():
+
     with open("arduino_log.txt", "a") as log_file:
         while True:
             if arduino.in_waiting:
@@ -60,6 +64,7 @@ def read_from_output():
                     print("[OUTPUT LOG]", line)
                     log_file.write(line + "\n")
                     log_file.flush()
+
                     if line == "[OM_CV_REQUEST]":
                         global cv_request
                         cv_request = True
@@ -67,13 +72,16 @@ def read_from_output():
                         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                         arduino_csv_writer.writerow([timestamp, line])
                         arduino_timing_log.flush()
+
             time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
+    # Build a list of class IDs (or -1 for missing detections)
     classes_message = [
         int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
     ]
+
     message = " ".join(map(str, classes_message)) + "\n"
     arduino.write(message.encode())
     print("[CV] Sent to OUTPUT:", message.strip())
@@ -92,6 +100,7 @@ def display_pred(img, largest_boxes):
             cv2.putText(img, text, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
 def assign_segment(x1, x2):
+
     x = ((x2 - x1) / 2) + x1
     segment_index = int(x // seg_size)
     if segment_index < 0:
@@ -246,6 +255,7 @@ def main():
     performance_log.close()
     arduino_timing_log.close()
     print("[CV] Live camera processing finished. Performance log saved.")
+
 
 if __name__ == '__main__':
     main()

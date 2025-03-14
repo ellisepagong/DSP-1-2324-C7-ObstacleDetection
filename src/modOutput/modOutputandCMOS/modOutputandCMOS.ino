@@ -17,13 +17,17 @@ ToF Sensors (VL53L0X):
       - I2C SDA: Pin 20, I2C SCL: Pin 21
       - Address: 0x32
 
+
 LED for Idle Mode: Digital Pin 4
+
+
 
 Motor Control Pins (Output Module):
   - MotorPins: {8, 9, 10, 11, 12, 13}
 
 Bluetooth (HC-05) Module (Output Module):
   - Uses Hardware Serial2 (RX2=16, TX2=17)
+
 
 Raspberry Pi / CV Module (Output Module):
   - Uses USB Serial (Serial)
@@ -62,6 +66,7 @@ const int motorPins[] = {8, 9, 10, 11, 12, 13};
 // ------------------ Global Variables ------------------
 String lastToFSensorData = ""; // Latest sensor data as string (e.g., "left center right")
 bool Error_1_sent = false;
+
 
 // Weights array for class scores (index corresponds to class value offset by 1)
 const int weights[] = {
@@ -112,6 +117,7 @@ void applyLongRangeMode(VL53L0X &sensor) {
   
   // Lower the signal rate limit from the default (≈0.25 MCPS) to 0.1 MCPS.
   // sensor.setSignalRateLimit(0.1);
+
 }
 
 // ------------------ Function Definitions ------------------
@@ -240,6 +246,7 @@ int areAllScoresZero(int scores[5]) {
   return 1;
 }
 
+
 // ---------- ToF Sensor Module Functions ----------
 bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char *name) {
   Serial.print(F("[INIT] Enabling "));
@@ -249,6 +256,7 @@ bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char
   delay(10);
   sensor.init();
   sensor.setAddress(address);
+
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
@@ -269,16 +277,19 @@ void enterIdleMode() {
 
 void readToFSensors() {
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
+
   uint16_t left_mm = loxLeft.readRangeSingleMillimeters();
   uint16_t center_mm = loxCenter.readRangeSingleMillimeters();
   uint16_t right_mm = loxRight.readRangeSingleMillimeters();
   
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
+
     enterIdleMode();
   }
   
   uint16_t left_cm, center_cm, right_cm;
+
   if ((left_mm / 10) >= 200) {
     left_cm = 0;
     Serial.println(F("[=====SENSOR DATA=====][PROCESS] Left sensor reading >= 200cm. Resetting to zero."));
@@ -306,6 +317,7 @@ void readToFSensors() {
   Serial.print(right_cm);
   Serial.println(F(" cm"));
   
+
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
   // Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
   // Serial.print(F("[PROCESS] Updated sensor data: "));
@@ -346,6 +358,7 @@ void updateCVData() {
 
 // ------------------ Setup ------------------
 void setup() {
+
   for (int i = 0; i < 6; i++) {
     pinMode(motorPins[i], OUTPUT);
     digitalWrite(motorPins[i], LOW);
@@ -378,6 +391,7 @@ void setup() {
     enterIdleMode();
   }
   
+
   applyLongRangeMode(loxLeft);
   applyLongRangeMode(loxCenter);
   applyLongRangeMode(loxRight);
@@ -401,6 +415,7 @@ void setup() {
   }
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
   
+
   lastCVTime = millis();
 }
 
@@ -417,6 +432,7 @@ void loop() {
   Serial.println("[OM_CV_REQUEST]");
   
   // 3. Gather sensor data
+
   unsigned long sensorStart = millis();
   readToFSensors();
   unsigned long sensorEnd = millis();
@@ -447,12 +463,14 @@ void loop() {
     Serial.println(class_byte);
 
     // --- Parse the CV message into an array of 5 integers ---
+
     int classes[5];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
     while (spaceIndex_class >= 0 && idx_class < 5) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
+
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
@@ -476,6 +494,7 @@ void loop() {
       return;
     }
     String dis_byte = lastToFSensorData;
+
     
     // Parse sensor distances (for left, front, and right sensors)
     int dis[3];
@@ -489,16 +508,15 @@ void loop() {
     }
     if (idx_dis < 3) {
       dis[idx_dis++] = dis_byte.toInt();
-    }
-    
-    // Compute weights and choose motor activation based on CV classes and sensor distances.
+
     int* scores = getWeights(classes, dis);
     if (scores == NULL) {
       Serial.println(F("[OUTPUT LOG] [HANDSHAKE] Memory allocation failed."));
       return;
     }
-    
+ 
     // Determine highest score among segments
+
     int maxScore = 0;
     int maxScoreId = 0;
     if (areAllScoresZero(scores)) {
@@ -589,6 +607,7 @@ void loop() {
   
   unsigned long loopEnd = millis();
   unsigned long overallDuration = loopEnd - loopStart;
+
   Serial.print(F("[TIMING] [OVERALL] "));
   Serial.print(overallDuration);
   Serial.println(F(" ms"));
