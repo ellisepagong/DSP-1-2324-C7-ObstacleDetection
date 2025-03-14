@@ -14,11 +14,10 @@ def getMonoCamera(pipeline, isLeft):
     
     if isLeft:
         mono.setBoardSocket(dai.CameraBoardSocket.CAM_B)  # Fix for LEFT
-        # DEPRECATED: mono.setBoardSocket(dai.CameraBoardSocket.LEFT)
+		# DEPRECATED: mono.setBoardSocket(dai.CameraBoardSocket.LEFT)
     else:
-       	mono.setBoardSocket(dai.CameraBoardSocket.CAM_C)  # Fix for RIGHT
+        mono.setBoardSocket(dai.CameraBoardSocket.CAM_C)  # Fix for RIGHT
         # DEPRECATED: mono.setBoardSocket(dai.CameraBoardSocket.RIGHT)
-    
     return mono
 
 # Function to create stereo depth pair
@@ -60,7 +59,7 @@ if __name__ == "__main__":
         queueRight = device.getOutputQueue(name="right", maxSize=1)
         queueDisp = device.getOutputQueue(name="disparity", maxSize=1, blocking=False)
 
-        multiplier = 255 / stereo.getMaxDisparity()
+        multiplier = 255 / stereo.initialConfig.getMaxDisparity()  # Fix for deprecated method
 
         while True:
             leftFrame = getFrame(queueLeft)
@@ -72,8 +71,8 @@ if __name__ == "__main__":
             disparityFrame = cv2.applyColorMap(disparityFrame, cv2.COLORMAP_JET)
 
             # Show outputs
-            stereoView = np.hstack((leftFrame, rightFrame))
-            cv2.imshow("Camera Feed", stereoView)
+            out = np.uint8(leftFrame/2 + rightFrame/2)
+            cv2.imshow("Camera Feed", out)
             cv2.imshow("Disparity Map", disparityFrame)
 
             if cv2.waitKey(1) == ord('q'):
