@@ -545,12 +545,13 @@ void loop() {
       
       free(scores);
       
+      motorLogic(maxScoreId);
       unsigned long cvEndTime = millis();
       unsigned long cvDuration = cvEndTime - cvStartTime;
       Serial.print(F("[TIMING] [SO4] "));
       Serial.print(cvDuration);
       Serial.println(F(" ms"));
-      motorLogic(maxScoreId);
+      
     }
     
     
