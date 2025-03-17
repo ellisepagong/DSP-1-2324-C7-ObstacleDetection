@@ -28,62 +28,16 @@ DISPLAY_HEIGHT = 360
 SEG_SIZE = DISPLAY_WIDTH / 5
 
 # ----------------------------
-# Parameters for depth conversion (calibration)
-# ----------------------------
-BASELINE_MM = 75.0      # example: 75 mm (adjust as needed)
-FOCAL_LENGTH_PX = 400.0 # example: 400 px (adjust as needed)
-
-# ----------------------------
-# Helper Functions
+# Helper Functions for Object Detection
 # ----------------------------
 def assign_segment(x1, x2):
     x_center = ((x2 - x1) / 2) + x1
     segment_index = int(x_center // SEG_SIZE)
     return max(0, min(segment_index, 4))
 
-def disparity_to_distance(disparity_val):
-    """
-    Converts a raw disparity value to distance in centimeters using:
-      depth (cm) = (baseline_mm * focal_length_px) / (disparity_val * 10)
-    Adjust the parameters as per your calibration.
-    """
-    if disparity_val > 0:
-        depth_mm = (BASELINE_MM * FOCAL_LENGTH_PX) / disparity_val
-        return depth_mm / 10  # convert mm to cm
-    else:
-        return 0
-
-def compute_region_distances(disparity_frame):
-    """
-    Computes the closest distance (using the highest disparity) in three regions:
-    left (segments 0-1), center (segment 2), and right (segments 3-4).
-    Returns distances in centimeters.
-    """
-    h, w = disparity_frame.shape
-    col_width = w / 5
-    regions = {'left': [], 'center': [], 'right': []}
-    for col in range(w):
-        seg = int(col // col_width)
-        seg = max(0, min(seg, 4))
-        if seg in [0, 1]:
-            region = 'left'
-        elif seg == 2:
-            region = 'center'
-        else:
-            region = 'right'
-        valid_vals = disparity_frame[:, col][disparity_frame[:, col] > 0]
-        regions[region].extend(valid_vals.tolist())
-    
-    distances = {}
-    for region, disp_values in regions.items():
-        if disp_values:
-            max_disp = max(disp_values)
-            distances[region] = int(disparity_to_distance(max_disp))
-        else:
-            distances[region] = 0
-    return distances
-
 def send_to_console(largest_boxes, distances):
+    # Prepare a message with five class IDs (or -1 if no detection)
+    # followed by three distance values (left, center, right) in centimeters.
     classes_message = [
         int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
@@ -92,9 +46,6 @@ def send_to_console(largest_boxes, distances):
     message = " ".join(map(str, classes_message + distance_message))
     print("[CV] Output values:", message)
 
-# ----------------------------
-# TFLite Object Detection Functions
-# ----------------------------
 def preprocess_input(image, input_size):
     resized_img = cv2.resize(image, (input_size, input_size))
     normalized_img = resized_img / 255.0
@@ -117,7 +68,7 @@ def non_max_suppression(detections, iou_threshold):
     indices = indices.flatten() if len(indices) > 0 else []
     return [detections[i] for i in indices]
 
-def process_detections(output_data, input_shape, conf_threshold=0.23, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.60, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     detections = []
@@ -154,12 +105,45 @@ def display_pred(img, largest_boxes):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
 # ----------------------------
-# Luxonis OAK-D Pipeline Setup
+# Updated Depth Perception Functions
+# ----------------------------
+def compute_region_distances_depth(depth_frame):
+    """
+    Computes the minimum depth (i.e. closest object) in three regions:
+    left (segments 0-1), center (segment 2), and right (segments 3-4).
+    The depth_frame is in millimeters.
+    Returns distances in centimeters as integers.
+    """
+    h, w = depth_frame.shape
+    col_width = w / 5
+    regions = {'left': [], 'center': [], 'right': []}
+    for col in range(w):
+        seg = int(col // col_width)
+        seg = max(0, min(seg, 4))
+        if seg in [0, 1]:
+            region = 'left'
+        elif seg == 2:
+            region = 'center'
+        else:
+            region = 'right'
+        valid_vals = depth_frame[:, col][depth_frame[:, col] > 0]
+        regions[region].extend(valid_vals.tolist())
+    
+    distances = {}
+    for region, vals in regions.items():
+        if vals:
+            distances[region] = int(min(vals) / 10.0)  # Convert mm to cm
+        else:
+            distances[region] = 0
+    return distances
+
+# ----------------------------
+# Updated Pipeline Setup for Improved Depth Perception
 # ----------------------------
 def create_pipeline():
     pipeline = dai.Pipeline()
     
-    # Set up color camera using the new naming convention.
+    # Color camera (CAM_A)
     colorCam = pipeline.createColorCamera()
     colorCam.setPreviewSize(640, 480)
     colorCam.setInterleaved(False)
@@ -168,7 +152,7 @@ def create_pipeline():
     xoutColor.setStreamName("color")
     colorCam.preview.link(xoutColor.input)
     
-    # Setup mono cameras with updated board sockets.
+    # Mono cameras (CAM_B and CAM_C)
     monoLeft = pipeline.createMonoCamera()
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoLeft.setBoardSocket(dai.CameraBoardSocket.CAM_B)
@@ -177,17 +161,24 @@ def create_pipeline():
     monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoRight.setBoardSocket(dai.CameraBoardSocket.CAM_C)
     
-    # Create stereo depth node.
-    stereo = pipeline.createStereoDepth()
-    stereo.setLeftRightCheck(True)
+    # Stereo Depth node with improved configuration
+    stereo = pipeline.create(dai.node.StereoDepth)
+    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
+    stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
     stereo.setSubpixel(True)
+    stereo.setSubpixelFractionalBits(5)
+    stereo.setLeftRightCheck(True)
+    stereo.setExtendedDisparity(False)
+    stereo.initialConfig.setDisparityShift(1)
+    stereo.setOutputSize(640, 400)  # Set output size as in your depth perception code
+    
     monoLeft.out.link(stereo.left)
     monoRight.out.link(stereo.right)
     
-    # Output disparity stream.
-    xoutDisp = pipeline.createXLinkOut()
-    xoutDisp.setStreamName("disparity")
-    stereo.disparity.link(xoutDisp.input)
+    # Depth output stream (named "depth")
+    xoutDepth = pipeline.createXLinkOut()
+    xoutDepth.setStreamName("depth")
+    stereo.depth.link(xoutDepth.input)
     
     return pipeline, stereo
 
@@ -195,17 +186,16 @@ def create_pipeline():
 # Main Function
 # ----------------------------
 def main():
-    # Return both pipeline and stereo node.
     pipeline, stereo = create_pipeline()
     with dai.Device(pipeline) as device:
         queueColor = device.getOutputQueue(name="color", maxSize=1, blocking=True)
-        queueDisp = device.getOutputQueue(name="disparity", maxSize=1, blocking=True)
+        queueDepth = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
         
-        # Get max disparity from stereo configuration for visualization.
+        # For visualization, compute a multiplier from max disparity
         max_disp = stereo.initialConfig.getMaxDisparity()
-        multiplier = 255.0 / max_disp  # used to normalize disparity values
+        multiplier = 255.0 / max_disp
         
-        # Use TensorFlow's built-in TFLite Interpreter.
+        # TensorFlow Lite Interpreter for object detection
         interpreter = tf.lite.Interpreter(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\model_float16_480x480.tflite")
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
@@ -216,12 +206,19 @@ def main():
         prev_frame_time = time.time()
         
         while True:
+            # Get color frame
             rgbFrame = queueColor.get().getCvFrame()
             rgbFrame_disp = cv2.resize(rgbFrame, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
             
-            raw_disp = queueDisp.get().getFrame()
-            disp_resized = cv2.resize(raw_disp, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
+            # Get depth frame (in mm)
+            inDepth = queueDepth.get()
+            depthFrame = inDepth.getFrame()
+            depthFrame = np.clip(depthFrame, 0, 5100)  # Clip max depth to 5100 mm
             
+            # Compute region distances (in cm, as integers)
+            distances = compute_region_distances_depth(depthFrame)
+            
+            # Preprocess color image for detection
             input_tensor = preprocess_input(rgbFrame_disp, input_size)
             
             current_time = time.time()
@@ -259,18 +256,18 @@ def main():
                     largest_areas[seg] = area
                     largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
             
-            distances = compute_region_distances(disp_resized)
-            
             display_pred(rgbFrame_disp, largest_boxes)
             send_to_console(largest_boxes, distances)
             
             fps_text = f"Live FPS: {live_fps:.2f} | Inference FPS: {inference_fps:.2f}"
             cv2.putText(rgbFrame_disp, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
             
-            # Use the multiplier to normalize the raw disparity image for visualization.
-            disp_vis = cv2.applyColorMap(cv2.convertScaleAbs(disp_resized, alpha=multiplier), cv2.COLORMAP_JET)
+            # Normalize and color-map depth frame for visualization
+            depth_norm = cv2.normalize(depthFrame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            depth_colormap = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
+            
             cv2.imshow("RGB Camera Feed", rgbFrame_disp)
-            cv2.imshow("Disparity Map", disp_vis)
+            cv2.imshow("Depth Map", depth_colormap)
             
             if cv2.waitKey(1) == ord('q'):
                 print("[CV] Exiting main loop.")
