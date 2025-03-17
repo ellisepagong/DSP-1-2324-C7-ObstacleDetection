@@ -27,29 +27,35 @@ DISPLAY_WIDTH = 360   # used for both display and segmentation
 DISPLAY_HEIGHT = 360  
 SEG_SIZE = DISPLAY_WIDTH / 5
 
-# Calibration constant for converting disparity to distance (in cm)
-# NOTE: This is a placeholder. Adjust it via calibration.
-CALIBRATION_CONSTANT = 1500
+# ----------------------------
+# Parameters for depth conversion (calibration)
+# ----------------------------
+BASELINE_MM = 75.0      # example: 75 mm (adjust as needed)
+FOCAL_LENGTH_PX = 400.0 # example: 400 px (adjust as needed)
 
 # ----------------------------
 # Helper Functions
 # ----------------------------
 def assign_segment(x1, x2):
-    # Compute center x-coordinate of bounding box and assign to one of 5 segments (0 to 4)
     x_center = ((x2 - x1) / 2) + x1
     segment_index = int(x_center // SEG_SIZE)
     return max(0, min(segment_index, 4))
 
 def disparity_to_distance(disparity_val):
-    # Converts a raw disparity value to distance in centimeters.
+    """
+    Converts a raw disparity value to distance in centimeters using:
+      depth (cm) = (baseline_mm * focal_length_px) / (disparity_val * 10)
+    Adjust the parameters as per your calibration.
+    """
     if disparity_val > 0:
-        return CALIBRATION_CONSTANT / disparity_val
+        depth_mm = (BASELINE_MM * FOCAL_LENGTH_PX) / disparity_val
+        return depth_mm / 10  # convert mm to cm
     else:
         return 0
 
 def compute_region_distances(disparity_frame):
     """
-    Computes the closest distance (highest disparity) in three regions:
+    Computes the closest distance (using the highest disparity) in three regions:
     left (segments 0-1), center (segment 2), and right (segments 3-4).
     Returns distances in centimeters.
     """
@@ -78,8 +84,6 @@ def compute_region_distances(disparity_frame):
     return distances
 
 def send_to_console(largest_boxes, distances):
-    # Prepare a message with five class IDs (or -1 if no detection)
-    # followed by three distance values (left, center, right) in cm.
     classes_message = [
         int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
@@ -155,45 +159,54 @@ def display_pred(img, largest_boxes):
 def create_pipeline():
     pipeline = dai.Pipeline()
     
+    # Set up color camera using the new naming convention.
     colorCam = pipeline.createColorCamera()
     colorCam.setPreviewSize(640, 480)
     colorCam.setInterleaved(False)
-    colorCam.setBoardSocket(dai.CameraBoardSocket.RGB)
+    colorCam.setBoardSocket(dai.CameraBoardSocket.CAM_A)
     xoutColor = pipeline.createXLinkOut()
     xoutColor.setStreamName("color")
     colorCam.preview.link(xoutColor.input)
     
+    # Setup mono cameras with updated board sockets.
     monoLeft = pipeline.createMonoCamera()
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-    monoLeft.setBoardSocket(dai.CameraBoardSocket.LEFT)
+    monoLeft.setBoardSocket(dai.CameraBoardSocket.CAM_B)
     
     monoRight = pipeline.createMonoCamera()
     monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
-    monoRight.setBoardSocket(dai.CameraBoardSocket.RIGHT)
+    monoRight.setBoardSocket(dai.CameraBoardSocket.CAM_C)
     
+    # Create stereo depth node.
     stereo = pipeline.createStereoDepth()
     stereo.setLeftRightCheck(True)
     stereo.setSubpixel(True)
     monoLeft.out.link(stereo.left)
     monoRight.out.link(stereo.right)
     
+    # Output disparity stream.
     xoutDisp = pipeline.createXLinkOut()
     xoutDisp.setStreamName("disparity")
     stereo.disparity.link(xoutDisp.input)
     
-    return pipeline
+    return pipeline, stereo
 
 # ----------------------------
 # Main Function
 # ----------------------------
 def main():
-    pipeline = create_pipeline()
+    # Return both pipeline and stereo node.
+    pipeline, stereo = create_pipeline()
     with dai.Device(pipeline) as device:
         queueColor = device.getOutputQueue(name="color", maxSize=1, blocking=True)
         queueDisp = device.getOutputQueue(name="disparity", maxSize=1, blocking=True)
         
-        # Use TensorFlow's built-in TFLite Interpreter
-        interpreter = tf.lite.Interpreter(model_path="model_float16_480x480.tflite")
+        # Get max disparity from stereo configuration for visualization.
+        max_disp = stereo.initialConfig.getMaxDisparity()
+        multiplier = 255.0 / max_disp  # used to normalize disparity values
+        
+        # Use TensorFlow's built-in TFLite Interpreter.
+        interpreter = tf.lite.Interpreter(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\model_float16_480x480.tflite")
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
@@ -249,15 +262,14 @@ def main():
             distances = compute_region_distances(disp_resized)
             
             display_pred(rgbFrame_disp, largest_boxes)
-            
-            # Instead of sending data to Arduino, output the values to the console
             send_to_console(largest_boxes, distances)
             
             fps_text = f"Live FPS: {live_fps:.2f} | Inference FPS: {inference_fps:.2f}"
             cv2.putText(rgbFrame_disp, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
-            cv2.imshow("RGB Camera Feed", rgbFrame_disp)
             
-            disp_vis = cv2.applyColorMap(cv2.convertScaleAbs(disp_resized, alpha=2), cv2.COLORMAP_JET)
+            # Use the multiplier to normalize the raw disparity image for visualization.
+            disp_vis = cv2.applyColorMap(cv2.convertScaleAbs(disp_resized, alpha=multiplier), cv2.COLORMAP_JET)
+            cv2.imshow("RGB Camera Feed", rgbFrame_disp)
             cv2.imshow("Disparity Map", disp_vis)
             
             if cv2.waitKey(1) == ord('q'):
