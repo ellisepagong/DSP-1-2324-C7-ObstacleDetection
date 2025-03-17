@@ -20,62 +20,82 @@ def getMonoCamera(pipeline, isLeft):
         # DEPRECATED: mono.setBoardSocket(dai.CameraBoardSocket.RIGHT)
     return mono
 
-# Function to create stereo depth pair
-def getStereoPair(pipeline, monoLeft, monoRight):
-    stereo = pipeline.createStereoDepth()
-    stereo.setLeftRightCheck(True)  # Marks occluded pixels as invalid
-    stereo.setSubpixel(True)  # Increases depth precision
-    monoLeft.out.link(stereo.left)
-    monoRight.out.link(stereo.right)
-    return stereo
+pipeline = dai.Pipeline()
 
-if __name__ == "__main__":
-    # Initialize pipeline
-    pipeline = dai.Pipeline()
+# setup left and right cams
+monoLeft = getMonoCamera(pipeline, True)
+monoRight = getMonoCamera(pipeline, False)
 
-    # Setup mono cameras
-    monoLeft = getMonoCamera(pipeline, isLeft=True)
-    monoRight = getMonoCamera(pipeline, isLeft=False)
+def normalize_bbox(bbox, frame_shape):
+    h, w = frame_shape[:2]
+    x_min = int(bbox[0] * w)
+    y_min = int(bbox[1] * h)
+    x_max = int(bbox[2] * w)
+    y_max = int(bbox[3] * h)
+    return x_min, y_min, x_max, y_max
 
-    # Setup output streams
-    xoutLeft = pipeline.createXLinkOut()
-    xoutLeft.setStreamName("left")
-    xoutRight = pipeline.createXLinkOut()
-    xoutRight.setStreamName("right")
+# neural network node
+nn = pipeline.create(dai.node.NeuralNetwork)
+nn.setBlobPath(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\best.pt")
 
-    monoLeft.out.link(xoutLeft.input)
-    monoRight.out.link(xoutRight.input)
+# RGB camera node
+cam_rgb = pipeline.create(dai.node.ColorCamera)
+cam_rgb.setPreviewSize(450, 450) # model input image size
+cam_rgb.setInterleaved(False)
+cam_rgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 
-    # Setup stereo depth
-    stereo = getStereoPair(pipeline, monoLeft, monoRight)
-    
-    xoutDisp = pipeline.createXLinkOut()
-    xoutDisp.setStreamName("disparity")
-    stereo.disparity.link(xoutDisp.input)
+# Depth node
+stereo = pipeline.create(dai.node.StereoDepth)
+stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+stereo.setDepthAlign(dai.CameraBoardSocket.RGB)
 
-    # Start pipeline
-    with dai.Device(pipeline) as device:
-        queueLeft = device.getOutputQueue(name="left", maxSize=1)
-        queueRight = device.getOutputQueue(name="right", maxSize=1)
-        queueDisp = device.getOutputQueue(name="disparity", maxSize=1, blocking=False)
+# link camera feed to model input layer
+cam_rgb.preview.link(nn.input)
 
-        multiplier = 255 / stereo.initialConfig.getMaxDisparity()  # Fix for deprecated method
+# Define output streams
+xout_rgb = pipeline.create(dai.node.XLinkOut)
+xout_rgb.setStreamName("rgb")
+cam_rgb.preview.link(xout_rgb.input)
 
-        while True:
-            leftFrame = getFrame(queueLeft)
-            rightFrame = getFrame(queueRight)
-            disparityFrame = queueDisp.get().getFrame()
+nn_out = pipeline.create(dai.node.XLinkOut)
+nn_out.setStreamName("nn")
+nn.out.link(nn_out.input)
 
-            # Normalize disparity for better visualization
-            disparityFrame = (disparityFrame * multiplier).astype(np.uint8)
-            disparityFrame = cv2.applyColorMap(disparityFrame, cv2.COLORMAP_JET)
+xout_depth = pipeline.create(dai.node.XLinkOut)
+xout_depth.setStreamName("depth")
+stereo.depth.link(xout_depth.input)
 
-            # Show outputs
-            out = np.uint8(leftFrame/2 + rightFrame/2)
-            cv2.imshow("Camera Feed", out)
-            cv2.imshow("Disparity Map", disparityFrame)
+with dai.Device(pipeline) as device:
+    queueRGB = device.getOutputQueue(name="rgb", maxSize=1, blocking=False)
+    queueNN = device.getOutputQueue(name="nn", maxSize=1, blocking=False)
+    queueDepth = device.getOutputQueue(name="depth", maxSize=1, blocking=False)
 
-            if cv2.waitKey(1) == ord('q'):
-                break
+    while True:
 
-    cv2.destroyAllWindows()
+        out_RGB = queueRGB.get()
+        out_nn = queueNN.get()
+        out_dep = queueDepth.get()
+
+        frame = out_RGB.getCvFrame()
+        depth = in_depth.getFrame()
+
+        results = np.array(out_nn.getFirstLayerFp16())
+
+        for i in range(0, len(results), 6):
+            x_min, y_min, x_max, y_max, confidence, class_id = results[i:i+6]
+
+            if confidence > 0.5:  # Confidence threshold
+                x1, y1, x2, y2 = denormalize_bbox([x_min, y_min, x_max, y_max], frame.shape)
+
+                # Estimate depth by taking the median value inside the bounding box
+                object_depth = np.median(depth[y1:y2, x1:x2])
+
+                # Draw bounding box
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                label = f"Class {int(class_id)}: {object_depth:.2f}mm"
+                cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        cv2.imshow("Object Detection", frame)
+
+        if cv2.waitKey(1) == ord('q'):
+            break
