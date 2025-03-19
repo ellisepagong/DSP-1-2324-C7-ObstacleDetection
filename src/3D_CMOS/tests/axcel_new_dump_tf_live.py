@@ -154,9 +154,10 @@ def create_pipeline():
     Sets up a DepthAI pipeline with a color camera and a stereo depth node.
     The stereo depth simulates two depth cameras.
     """
+    
     pipeline = dai.Pipeline()
     
-    # Color camera for CV
+    # Color camera (CAM_A)
     colorCam = pipeline.createColorCamera()
     colorCam.setPreviewSize(640, 480)
     colorCam.setInterleaved(False)
@@ -166,6 +167,7 @@ def create_pipeline():
     colorCam.preview.link(xoutColor.input)
     
     # Mono cameras for depth
+    # Mono cameras (CAM_B and CAM_C)
     monoLeft = pipeline.createMonoCamera()
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoLeft.setBoardSocket(dai.CameraBoardSocket.CAM_B)
@@ -174,7 +176,7 @@ def create_pipeline():
     monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoRight.setBoardSocket(dai.CameraBoardSocket.CAM_C)
     
-    # Stereo Depth node with alignment to the color camera
+    # Stereo Depth node with improved configuration
     stereo = pipeline.create(dai.node.StereoDepth)
     stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
     stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
@@ -190,6 +192,9 @@ def create_pipeline():
     
     return pipeline, stereo
 
+# ----------------------------
+# Main Function
+# ----------------------------
 def main():
     pipeline, stereo = create_pipeline()
     with dai.Device(pipeline) as device:
@@ -200,13 +205,13 @@ def main():
         max_disp = stereo.initialConfig.getMaxDisparity()
         multiplier = 255.0 / max_disp
         
-        # Load TensorFlow Lite object detection model.
+        # TensorFlow Lite Interpreter for object detection
         interpreter = tf.lite.Interpreter(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\model_float16_480x480.tflite")
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
         input_size = input_details[0]['shape'][1]
-        print(f"Model input size: {input_size}x{input_size}")
+        print(f"[CV] Model input size: {input_size}x{input_size}")
         
         prev_frame_time = time.time()
         
@@ -290,7 +295,7 @@ def main():
             cv2.imshow("Depth Map", depth_colormap)
             
             if cv2.waitKey(1) == ord('q'):
-                print("Exiting main loop.")
+                print("[CV] Exiting main loop.")
                 break
         
         cv2.destroyAllWindows()
