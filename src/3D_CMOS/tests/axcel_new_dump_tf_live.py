@@ -27,7 +27,7 @@ classes_dict = {
 # ----------------------------
 DISPLAY_WIDTH = 720   # used for both display and segmentation
 DISPLAY_HEIGHT = 720
-SEG_SIZE = DISPLAY_WIDTH / 5
+SEG_SIZE = DISPLAY_WIDTH / 7
 
 # ----------------------------
 # Helper Functions for Object Detection
@@ -66,22 +66,6 @@ def preprocess_input(image, input_size):
     normalized_img = resized_img / 255.0
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
-
-def non_max_suppression(detections, iou_threshold):
-    if len(detections) == 0:
-        return []
-    detections = np.array(detections)
-    x1 = detections[:, 2]
-    y1 = detections[:, 3]
-    x2 = detections[:, 4]
-    y2 = detections[:, 5]
-    scores = detections[:, 1]
-    boxes = []
-    for i in range(len(detections)):
-        boxes.append([int(x1[i]), int(y1[i]), int(x2[i] - x1[i]), int(y2[i] - y1[i])])
-    indices = cv2.dnn.NMSBoxes(boxes, scores.tolist(), score_threshold=0.23, nms_threshold=iou_threshold)
-    indices = indices.flatten() if len(indices) > 0 else []
-    return [detections[i] for i in indices]
 
 def process_detections(output_data, input_shape, conf_threshold=0.60, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
