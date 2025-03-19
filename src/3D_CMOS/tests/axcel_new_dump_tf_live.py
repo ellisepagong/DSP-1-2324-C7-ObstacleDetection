@@ -166,7 +166,6 @@ def create_pipeline():
     xoutColor.setStreamName("color")
     colorCam.preview.link(xoutColor.input)
     
-    # Mono cameras for depth
     # Mono cameras (CAM_B and CAM_C)
     monoLeft = pipeline.createMonoCamera()
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
