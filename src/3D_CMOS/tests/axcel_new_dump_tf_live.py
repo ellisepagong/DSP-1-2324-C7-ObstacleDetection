@@ -85,10 +85,11 @@ def display_pred(img, largest_boxes):
     """
     for data in largest_boxes.values():
         if data is not None:
-            box, conf, cls = data
+            box, conf, cls, depth_val = data
             x1, y1, x2, y2 = box
             cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 50, 50), 2)
-            text = f'Class: {classes_dict[int(cls)]}, Conf: {conf:.2f}'
+            # Add the distance (in cm) to the label text.
+            text = f'Class: {classes_dict[int(cls)]}, Conf: {conf:.2f}, Dist: {depth_val}cm'
             (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             rect_start = (int(x1), int(y1) - text_height - 10)
             rect_end = (int(x1) + text_width, int(y1))
@@ -183,8 +184,7 @@ def create_pipeline():
     stereo.setLeftRightCheck(True)
     # ----- Added modifications for near-range accuracy -----
     stereo.setExtendedDisparity(True)
-    stereo.initialConfig.setDisparityShift(30)
-    stereo.initialConfig.setConfidenceThreshold(150)
+    stereo.initialConfig.setConfidenceThreshold(100)
     # -------------------------------------------------------
     monoLeft.out.link(stereo.left)
     monoRight.out.link(stereo.right)
@@ -269,11 +269,12 @@ def main():
                 seg = assign_segment(x1_disp, x2_disp)
                 if area > largest_areas[seg]:
                     largest_areas[seg] = area
-                    largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
-                    # Estimate depth using the heat map by taking the median inside the bounding box.
                     x_center = (x1_disp + x2_disp) / 2
                     y_center = (y1_disp + y2_disp) / 2
-                    depth_at_centers[seg] = get_depth_at_point(depthFrame, x_center, y_center)
+                    depth_val = get_depth_at_point(depthFrame, x_center, y_center)
+                    largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id, depth_val)
+                    depth_at_centers[seg] = depth_val
+
             
             # For each segment, choose the detection depth if available; otherwise, use the column depth.
             final_depths = []
