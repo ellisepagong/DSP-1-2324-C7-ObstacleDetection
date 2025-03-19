@@ -181,6 +181,11 @@ def create_pipeline():
     stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
     stereo.setSubpixel(True)
     stereo.setLeftRightCheck(True)
+    # ----- Added modifications for near-range accuracy -----
+    stereo.setExtendedDisparity(True)
+    stereo.initialConfig.setDisparityShift(30)
+    stereo.initialConfig.setConfidenceThreshold(150)
+    # -------------------------------------------------------
     monoLeft.out.link(stereo.left)
     monoRight.out.link(stereo.right)
     
