@@ -107,7 +107,7 @@ def send_to_console(largest_boxes, final_depths, inference_time):
     """
     os.system('cls' if os.name == 'nt' else 'clear')
     classes_message = [int(largest_boxes[i][2]) if largest_boxes[i] is not None else -1 for i in range(NUM_SEGMENTS)]
-    message = "< " + " ".join(map(str, classes_message + final_depths)) + " >"
+    message = " ".join(map(str, classes_message + final_depths))
     print("================ LIVE DATA ================")
     print(f"Inference time: {inference_time:.3f} seconds")
     print(f"Output Values (CV): {message}")
@@ -124,7 +124,7 @@ def preprocess_input(image, input_size):
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
 
-def process_detections(output_data, input_shape, conf_threshold=0.60, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.41, iou_threshold=0.5):
     """
     Processes raw NN output into a list of detections [class_id, score, x1, y1, x2, y2].
     Coordinates are scaled to the input image size.
@@ -248,7 +248,7 @@ def main():
             
             output_data = interpreter.get_tensor(output_details[0]['index'])
             detections = process_detections(output_data, (input_size, input_size, 3),
-                                            conf_threshold=0.23, iou_threshold=0.5)
+                                            conf_threshold=0.41, iou_threshold=0.5)
             
             scale_x = DISPLAY_WIDTH / input_size
             scale_y = DISPLAY_HEIGHT / input_size
