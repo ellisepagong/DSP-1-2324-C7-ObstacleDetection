@@ -32,7 +32,7 @@ classes_dict = {
 display_width = 720  
 display_height = 720
 max_width = 720  
-seg_size = max_width / 5
+seg_size = max_width / 7
 
 # Global variables for sharing the latest video frame
 latest_frame = None
@@ -191,8 +191,8 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         
         scale_x = display_width / input_size
         scale_y = display_height / input_size
-        largest_boxes = {i: None for i in range(5)}
-        largest_areas = {i: 0 for i in range(5)}
+        largest_boxes = {i: None for i in range(7)}
+        largest_areas = {i: 0 for i in range(7)}
         for detection in detections:
             class_id, score, x1, y1, x2, y2 = detection
             x1_disp = x1 * scale_x
@@ -200,8 +200,6 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
             x2_disp = x2 * scale_x
             y2_disp = y2 * scale_y
             area = (x2_disp - x1_disp) * (y2_disp - y1_disp)
-            if classes_dict[int(class_id)] == "pole":
-                area *= 0.3
             seg = assign_segment(x1_disp, x2_disp)
             if area > largest_areas[seg]:
                 largest_areas[seg] = area
