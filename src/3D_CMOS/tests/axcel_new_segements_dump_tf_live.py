@@ -203,78 +203,62 @@ def main():
     with dai.Device(pipeline) as device:
         queueColor = device.getOutputQueue(name="color", maxSize=1, blocking=True)
         queueDepth = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
-        
-        # For visualization: get multiplier if needed from max disparity.
-        max_disp = stereo.initialConfig.getMaxDisparity()
-        multiplier = 255.0 / max_disp
-        
-        # TensorFlow Lite Interpreter for object detection
+
         interpreter = tf.lite.Interpreter(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\model_float16_480x480.tflite")
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
         input_size = input_details[0]['shape'][1]
-        print(f"[CV] Model input size: {input_size}x{input_size}")
-        
+
         prev_frame_time = time.time()
-        
+
         while True:
-            # Get the color frame and resize for display.
             rgbFrame = queueColor.get().getCvFrame()
             rgbFrame_disp = cv2.resize(rgbFrame, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
-            
-            # Get the depth frame, clip its values, and then resize it to match the color frame.
+
+            # Draw segment lines
+            visualize_segments(rgbFrame_disp)
+
             inDepth = queueDepth.get()
             depthFrame = inDepth.getFrame()
             depthFrame = np.clip(depthFrame, 0, 5100)
             depthFrame = cv2.resize(depthFrame, (DISPLAY_WIDTH, DISPLAY_HEIGHT))
-            
-            # Preprocess the display frame for the object detection model.
+
             input_tensor = preprocess_input(rgbFrame_disp, input_size)
-            
+
             current_time = time.time()
             live_fps = 1.0 / (current_time - prev_frame_time) if (current_time - prev_frame_time) > 0 else 0
             prev_frame_time = current_time
-            
-            # Run inference.
+
             start_inference = time.time()
             interpreter.set_tensor(input_details[0]['index'], input_tensor)
             interpreter.invoke()
             inference_time = time.time() - start_inference
-            
+
             output_data = interpreter.get_tensor(output_details[0]['index'])
             detections = process_detections(output_data, (input_size, input_size, 3),
                                             conf_threshold=0.41, iou_threshold=0.5)
-            
+
             scale_x = DISPLAY_WIDTH / input_size
             scale_y = DISPLAY_HEIGHT / input_size
-            
-            # Initialize candidate detections for the two groups.
-            candidate_groupA = None  # For special classes (crosswalk, vehicle, bike, stairs)
-            candidate_groupB = None  # For all other classes
-            
-            # Process each detection.
+
+            candidate_groupA = None  
+            candidate_groupB = None  
+
             for detection in detections:
                 class_id, score, x1, y1, x2, y2 = detection
-                # Scale coordinates to display size.
                 x1_disp = x1 * scale_x
                 y1_disp = y1 * scale_y
                 x2_disp = x2 * scale_x
                 y2_disp = y2 * scale_y
-                
-                # Calculate center of bounding box.
                 x_center = (x1_disp + x2_disp) / 2
                 y_center = (y1_disp + y2_disp) / 2
-                
-                # Compute depth at the center of the detection.
                 depth_val = get_depth_at_point(depthFrame, x_center, y_center)
+
                 if depth_val == 0:
-                    continue  # Skip if depth data is invalid.
-                
-                # Determine segment using center coordinate.
+                    continue 
+
                 segment = int(x_center // SEG_SIZE)
-                
-                # Build a candidate record.
                 candidate = {
                     'class': class_id,
                     'score': score,
@@ -282,45 +266,36 @@ def main():
                     'segment': segment,
                     'box': (x1_disp, y1_disp, x2_disp, y2_disp)
                 }
-                
-                # Group A: special classes.
+
                 if class_id in SPECIAL_CLASSES:
                     if candidate_groupA is None or depth_val < candidate_groupA['depth']:
                         candidate_groupA = candidate
                 else:
-                    # Group B: all other classes.
                     if candidate_groupB is None or depth_val < candidate_groupB['depth']:
                         candidate_groupB = candidate
-            
-            # Prepare final output.
-            # For group B (non-special), output order: segment, depth, class.
+
             if candidate_groupB is not None:
                 out_groupB = f"{candidate_groupB['segment']} {candidate_groupB['depth']} {candidate_groupB['class']}"
             else:
                 out_groupB = "-1 -1 -1"
-            # For group A (special), output order: class, depth, segment.
             if candidate_groupA is not None:
                 out_groupA = f"{candidate_groupA['class']} {candidate_groupA['depth']} {candidate_groupA['segment']}"
             else:
                 out_groupA = "-1 -1 -1"
             final_output = out_groupB + " " + out_groupA
-            
-            # Draw candidate detections on the display frame.
+
             display_candidates(rgbFrame_disp, candidate_groupB, candidate_groupA)
-            
-            # Print the output message and additional info to the console.
             send_to_console(candidate_groupB, candidate_groupA, inference_time)
-            
+
             fps_text = f"Live FPS: {live_fps:.2f} | Inference FPS: {1.0/inference_time:.2f}"
             cv2.putText(rgbFrame_disp, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
-            
-            # Visualize the depth heat map.
+
             depth_norm = cv2.normalize(depthFrame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
             depth_colormap = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
-            
+
             cv2.imshow("RGB Camera Feed", rgbFrame_disp)
             cv2.imshow("Depth Map", depth_colormap)
-            
+
             if cv2.waitKey(1) == ord('q'):
                 print("[CV] Exiting main loop.")
                 break
