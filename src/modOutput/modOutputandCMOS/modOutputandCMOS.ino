@@ -17,13 +17,17 @@ ToF Sensors (VL53L0X):
       - I2C SDA: Pin 20, I2C SCL: Pin 21
       - Address: 0x32
 
+
 LED for Idle Mode: Digital Pin 4
+
+
 
 Motor Control Pins (Output Module):
   - MotorPins: {8, 9, 10, 11, 12, 13}
 
 Bluetooth (HC-05) Module (Output Module):
   - Uses Hardware Serial2 (RX2=16, TX2=17)
+
 
 Raspberry Pi / CV Module (Output Module):
   - Uses USB Serial (Serial)
@@ -63,18 +67,16 @@ const int motorPins[] = {8, 9, 10, 11, 12, 13};
 String lastToFSensorData = ""; // Latest sensor data as string (e.g., "left center right")
 bool Error_1_sent = false;
 
+
 // Weights array for class scores (index corresponds to class value offset by 1)
 const int weights[] = {
   0, // none
   1, // animal
-  2, // barrier
   4, // bike
   2, // crosswalk
   1, // hazard-sign
   3, // person
-  1, // pole
   4, // stairs
-  1, // stall
   5  // vehicle
 };
 
@@ -112,6 +114,7 @@ void applyLongRangeMode(VL53L0X &sensor) {
   
   // Lower the signal rate limit from the default (≈0.25 MCPS) to 0.1 MCPS.
   // sensor.setSignalRateLimit(0.1);
+
 }
 
 // ------------------ Function Definitions ------------------
@@ -133,27 +136,36 @@ void cvHandshakeProcedure() {
 }
 
 // Compute weights based on CV classes and sensor distances (from modOutput.ino)
-int* getWeights(int classes[5], int distance[3]) {
-  int* scores = (int*)malloc(5 * sizeof(int));
+int* getWeights(int classes[7], int distance[3]) {
+  int* scores = (int*)malloc(7 * sizeof(int));
   if (scores == NULL) {
     return NULL;
   }
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 7; i++) {
     int current = classes[i];
     int base_w = 0, dis_w = 0, dir_w = 0, score = 0;
     
-    if (current >= 0 && current <= 9) {
+    if (current >= 0 && current <= 6) {
       base_w = weights[current + 1];
       int dis = 0;
-      if (i < 2) { // left
+
+      if (i < 3) { // left
         dis = distance[0];
-        if (i == 1) { dir_w = 2; }
-      } else if (i == 2) { // front
+        if (i == 1) { // front-left
+          dir_w = 1;
+        }else if (i == 2){
+          dir_w = 5;
+        }
+      } else if (i == 3) { // front
         dis = distance[1];
-        dir_w = 3;
-      } else if (i >= 3 && i < 5) { // right
+        dir_w = 8;
+      } else if (i >= 4 && i < 7) { // right
         dis = distance[2];
-        if (i == 3) { dir_w = 2; }
+        if (i == 5) { // front-right
+          dir_w = 1;
+        }else if (i == 4){
+          dir_w = 5;
+        }
       } else {
         scores[i] = -1;
         continue;
@@ -210,16 +222,26 @@ void motorLogic(int segment) {
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 2:
-      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
-      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], HIGH);
+      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], LOW);
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 3:
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
+      break;
+    case 4:
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
       digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], HIGH);
       digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], LOW);
       break;
-    case 4:
+    case 5:
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], LOW);
+      break;
+    case 6:
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
       digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], LOW);
       digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], HIGH);
@@ -233,12 +255,13 @@ void motorLogic(int segment) {
 }
 
 // Check if all scores are zero
-int areAllScoresZero(int scores[5]) {
-  for (int i = 0; i < 5; i++) {
+int areAllScoresZero(int scores[7]) {
+  for (int i = 0; i < 7; i++) {
     if (scores[i] != 0) return 0;
   }
   return 1;
 }
+
 
 // ---------- ToF Sensor Module Functions ----------
 bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char *name) {
@@ -249,6 +272,7 @@ bool initializeSensor(int xshutPin, VL53L0X &sensor, uint8_t address, const char
   delay(10);
   sensor.init();
   sensor.setAddress(address);
+
   Serial.print(F("[SUCCESS] "));
   Serial.print(name);
   Serial.println(F(" sensor initialized."));
@@ -269,16 +293,19 @@ void enterIdleMode() {
 
 void readToFSensors() {
   Serial.println(F("[PROCESS] Beginning sensor reading cycle..."));
+
   uint16_t left_mm = loxLeft.readRangeSingleMillimeters();
   uint16_t center_mm = loxCenter.readRangeSingleMillimeters();
   uint16_t right_mm = loxRight.readRangeSingleMillimeters();
   
   if (loxLeft.timeoutOccurred() || loxCenter.timeoutOccurred() || loxRight.timeoutOccurred()) {
     Serial.println(F("[ERROR] Sensor timeout! Entering idle mode..."));
+
     enterIdleMode();
   }
   
   uint16_t left_cm, center_cm, right_cm;
+
   if ((left_mm / 10) >= 200) {
     left_cm = 0;
     Serial.println(F("[=====SENSOR DATA=====][PROCESS] Left sensor reading >= 200cm. Resetting to zero."));
@@ -306,6 +333,7 @@ void readToFSensors() {
   Serial.print(right_cm);
   Serial.println(F(" cm"));
   
+
   lastToFSensorData = String(left_cm) + " " + String(center_cm) + " " + String(right_cm);
   // Serial.println(String("LOG:Sent sensor data: ") + lastToFSensorData);
   // Serial.print(F("[PROCESS] Updated sensor data: "));
@@ -346,6 +374,7 @@ void updateCVData() {
 
 // ------------------ Setup ------------------
 void setup() {
+
   for (int i = 0; i < 6; i++) {
     pinMode(motorPins[i], OUTPUT);
     digitalWrite(motorPins[i], LOW);
@@ -378,6 +407,7 @@ void setup() {
     enterIdleMode();
   }
   
+
   applyLongRangeMode(loxLeft);
   applyLongRangeMode(loxCenter);
   applyLongRangeMode(loxRight);
@@ -401,6 +431,7 @@ void setup() {
   }
   Serial.println(F("[OUTPUT LOG] [HANDSHAKE][CV] Handshake complete with CV module. Starting main loop."));
   
+
   lastCVTime = millis();
 }
 
@@ -414,9 +445,10 @@ void loop() {
   }
   
   // 2. Send the CV request signal so that CV module sends its latest inference
-  //Serial.println("[OM_CV_REQUEST]");
+  Serial.println("[OM_CV_REQUEST]");
   
   // 3. Gather sensor data
+
   unsigned long sensorStart = millis();
   readToFSensors();
   unsigned long sensorEnd = millis();
@@ -447,24 +479,26 @@ void loop() {
     Serial.println(class_byte);
 
     // --- Parse the CV message into an array of 5 integers ---
-    int classes[5];
+
+    int classes[7];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
-    while (spaceIndex_class >= 0 && idx_class < 5) {
+    while (spaceIndex_class >= 0 && idx_class < 7) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
+
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
-    if (idx_class < 5) {
+    if (idx_class < 7) {
       classes[idx_class++] = class_byte.toInt();
     }
 
     // Build a comma-separated string from the parsed classes
     String formattedCVData = "";
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
       formattedCVData += String(classes[i]);
-      if (i < 4) {
+      if (i < 6) {
         formattedCVData += ",";
       }
     }
@@ -476,6 +510,7 @@ void loop() {
       return;
     }
     String dis_byte = lastToFSensorData;
+
     
     // Parse sensor distances (for left, front, and right sensors)
     int dis[3];
@@ -489,23 +524,22 @@ void loop() {
     }
     if (idx_dis < 3) {
       dis[idx_dis++] = dis_byte.toInt();
-    }
-    
-    // Compute weights and choose motor activation based on CV classes and sensor distances.
+
     int* scores = getWeights(classes, dis);
     if (scores == NULL) {
       Serial.println(F("[OUTPUT LOG] [HANDSHAKE] Memory allocation failed."));
       return;
     }
-    
+ 
     // Determine highest score among segments
+
     int maxScore = 0;
     int maxScoreId = 0;
     if (areAllScoresZero(scores)) {
       Serial.println(F("[OUTPUT LOG] [MOTOR] All scores are zero. Executing default motor logic."));
       motorLogic(-1);
     } else {
-      for (int i = 1; i < 5; i++) {
+      for (int i = 1; i < 7; i++) {
         if (scores[i] > maxScore) {
           maxScore = scores[i];
           maxScoreId = i;
@@ -518,16 +552,29 @@ void loop() {
       // --- Bluetooth send timing ---
       unsigned long btStart = millis();
       char scoresString[50] = "";
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 7; i++) {
         char temp[10];
         sprintf(temp, "%d", scores[i]);
         strcat(scoresString, temp);
-        if (i < 4) {
+        if (i < 6) {
           strcat(scoresString, ",");
         }
       }
       message += ",";
       message += scoresString;
+
+      char distString[50] = "";
+      for (int i = 0; i < 3; i++) {
+        char temp[10];
+        sprintf(temp, "%d", dis[i]);
+        strcat(distString, temp);
+        if (i < 6) {
+          strcat(distString, ",");
+        }
+      }
+      message += ",";
+      message += distString;
+
       Serial2.println(message);
       Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
       Serial.println(message);
@@ -545,13 +592,12 @@ void loop() {
       
       free(scores);
       
-      motorLogic(maxScoreId);
       unsigned long cvEndTime = millis();
       unsigned long cvDuration = cvEndTime - cvStartTime;
       Serial.print(F("[TIMING] [SO4] "));
       Serial.print(cvDuration);
       Serial.println(F(" ms"));
-      
+      motorLogic(maxScoreId);
     }
     
     
@@ -590,6 +636,7 @@ void loop() {
   
   unsigned long loopEnd = millis();
   unsigned long overallDuration = loopEnd - loopStart;
+
   Serial.print(F("[TIMING] [OVERALL] "));
   Serial.print(overallDuration);
   Serial.println(F(" ms"));
