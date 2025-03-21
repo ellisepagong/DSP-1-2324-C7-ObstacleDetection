@@ -562,6 +562,19 @@ void loop() {
       }
       message += ",";
       message += scoresString;
+
+      char distString[50] = "";
+      for (int i = 0; i < 3; i++) {
+        char temp[10];
+        sprintf(temp, "%d", dis[i]);
+        strcat(distString, temp);
+        if (i < 6) {
+          strcat(distString, ",");
+        }
+      }
+      message += ",";
+      message += distString;
+
       Serial2.println(message);
       Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
       Serial.println(message);
