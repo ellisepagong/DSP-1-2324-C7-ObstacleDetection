@@ -11,18 +11,17 @@ import csv
 # ----------------------------
 # Object detection parameters and classes dictionary
 # ----------------------------
+# Class dictionary (must match your model’s class order)
 classes_dict = {
     0: 'animal',
-    1: 'barrier',
-    2: 'bike',
-    3: 'crosswalk',
-    4: 'hazard-sign',
-    5: 'person',
-    6: 'pole',
-    7: 'stairs',
-    8: 'stall',
-    9: 'vehicle'
+    1: 'bike',
+    2: 'crosswalk',
+    3: 'hazard-sign',
+    4: 'person',
+    5: 'stairs',
+    6: 'vehicle'
 }
+
 
 # Define which classes are considered "special"
 SPECIAL_CLASSES = {2, 3, 7, 9}  # bike, crosswalk, stairs, vehicle
