@@ -16,15 +16,12 @@ time.sleep(3)  # Wait 3 seconds for Arduino to reset
 # Class dictionary (must match your model’s class order)
 classes_dict = {
     0: 'animal',
-    1: 'barrier',
-    2: 'bike',
-    3: 'crosswalk',
-    4: 'hazard-sign',
-    5: 'person',
-    6: 'pole',
-    7: 'stairs',
-    8: 'stall',
-    9: 'vehicle'
+    1: 'bike',
+    2: 'crosswalk',
+    3: 'hazard-sign',
+    4: 'person',
+    5: 'stairs',
+    6: 'vehicle'
 }
 
 
@@ -115,7 +112,7 @@ def preprocess_input(image, input_size):
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
 
-def process_detections(output_data, input_shape, conf_threshold=0.23, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.41, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     detections = []
@@ -221,7 +218,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
 def main():
     global running, latest_frame
     print("[CV] Loading TFLite model...")
-    interpreter = Interpreter(model_path="model_float16_480x480.tflite")
+    interpreter = Interpreter(model_path="revised_model_float16_480x480.tflite")
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
