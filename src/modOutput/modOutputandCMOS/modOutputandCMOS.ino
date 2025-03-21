@@ -72,14 +72,11 @@ bool Error_1_sent = false;
 const int weights[] = {
   0, // none
   1, // animal
-  2, // barrier
   4, // bike
   2, // crosswalk
   1, // hazard-sign
   3, // person
-  1, // pole
   4, // stairs
-  1, // stall
   5  // vehicle
 };
 
@@ -139,27 +136,36 @@ void cvHandshakeProcedure() {
 }
 
 // Compute weights based on CV classes and sensor distances (from modOutput.ino)
-int* getWeights(int classes[5], int distance[3]) {
-  int* scores = (int*)malloc(5 * sizeof(int));
+int* getWeights(int classes[7], int distance[3]) {
+  int* scores = (int*)malloc(7 * sizeof(int));
   if (scores == NULL) {
     return NULL;
   }
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 7; i++) {
     int current = classes[i];
     int base_w = 0, dis_w = 0, dir_w = 0, score = 0;
     
-    if (current >= 0 && current <= 9) {
+    if (current >= 0 && current <= 6) {
       base_w = weights[current + 1];
       int dis = 0;
-      if (i < 2) { // left
+
+      if (i < 3) { // left
         dis = distance[0];
-        if (i == 1) { dir_w = 2; }
-      } else if (i == 2) { // front
+        if (i == 1) { // front-left
+          dir_w = 1;
+        }else if (i == 2){
+          dir_w = 5;
+        }
+      } else if (i == 3) { // front
         dis = distance[1];
-        dir_w = 3;
-      } else if (i >= 3 && i < 5) { // right
+        dir_w = 8;
+      } else if (i >= 4 && i < 7) { // right
         dis = distance[2];
-        if (i == 3) { dir_w = 2; }
+        if (i == 5) { // front-right
+          dir_w = 1;
+        }else if (i == 4){
+          dir_w = 5;
+        }
       } else {
         scores[i] = -1;
         continue;
@@ -216,16 +222,26 @@ void motorLogic(int segment) {
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 2:
-      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
-      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], HIGH);
+      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], LOW);
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 3:
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
+      break;
+    case 4:
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
       digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], HIGH);
       digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], LOW);
       break;
-    case 4:
+    case 5:
+      digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
+      digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], HIGH);
+      digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], LOW);
+      break;
+    case 6:
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
       digitalWrite(motorPins[2], LOW); digitalWrite(motorPins[3], LOW);
       digitalWrite(motorPins[4], HIGH); digitalWrite(motorPins[5], HIGH);
@@ -239,8 +255,8 @@ void motorLogic(int segment) {
 }
 
 // Check if all scores are zero
-int areAllScoresZero(int scores[5]) {
-  for (int i = 0; i < 5; i++) {
+int areAllScoresZero(int scores[7]) {
+  for (int i = 0; i < 7; i++) {
     if (scores[i] != 0) return 0;
   }
   return 1;
@@ -464,25 +480,25 @@ void loop() {
 
     // --- Parse the CV message into an array of 5 integers ---
 
-    int classes[5];
+    int classes[7];
     int idx_class = 0;
     int spaceIndex_class = class_byte.indexOf(' ');
-    while (spaceIndex_class >= 0 && idx_class < 5) {
+    while (spaceIndex_class >= 0 && idx_class < 7) {
       String classStr = class_byte.substring(0, spaceIndex_class);
       classes[idx_class++] = classStr.toInt();
 
       class_byte = class_byte.substring(spaceIndex_class + 1);
       spaceIndex_class = class_byte.indexOf(' ');
     }
-    if (idx_class < 5) {
+    if (idx_class < 7) {
       classes[idx_class++] = class_byte.toInt();
     }
 
     // Build a comma-separated string from the parsed classes
     String formattedCVData = "";
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
       formattedCVData += String(classes[i]);
-      if (i < 4) {
+      if (i < 6) {
         formattedCVData += ",";
       }
     }
@@ -523,7 +539,7 @@ void loop() {
       Serial.println(F("[OUTPUT LOG] [MOTOR] All scores are zero. Executing default motor logic."));
       motorLogic(-1);
     } else {
-      for (int i = 1; i < 5; i++) {
+      for (int i = 1; i < 7; i++) {
         if (scores[i] > maxScore) {
           maxScore = scores[i];
           maxScoreId = i;
@@ -536,11 +552,11 @@ void loop() {
       // --- Bluetooth send timing ---
       unsigned long btStart = millis();
       char scoresString[50] = "";
-      for (int i = 0; i < 5; i++) {
+      for (int i = 0; i < 7; i++) {
         char temp[10];
         sprintf(temp, "%d", scores[i]);
         strcat(scoresString, temp);
-        if (i < 4) {
+        if (i < 6) {
           strcat(scoresString, ",");
         }
       }
