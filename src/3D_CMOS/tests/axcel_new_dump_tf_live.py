@@ -6,6 +6,7 @@ import tensorflow as tf
 import sys
 import os
 import serial
+from pathlib import Path
 import csv
 
 # ----------------------------
@@ -204,9 +205,10 @@ def main():
         print(f"[CV] Failed to connect to Arduino: {e}")
         ser = None
 
-
-    # Open CSV file to log performance metrics
-    csv_filename = "CV_performance metrics.csv"
+    script_dir = Path(__file__).parent
+    metrics_dir = script_dir / "performance_metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    csv_filename = metrics_dir / "CV_performance metrics.csv"
     csv_file = open(csv_filename, mode='w', newline='')
     csv_writer = csv.writer(csv_file)
     csv_writer.writerow(["Inference_Time", "Total_Duration"])

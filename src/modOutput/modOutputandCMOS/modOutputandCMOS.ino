@@ -445,7 +445,7 @@ void loop() {
   }
   
   // 2. Send the CV request signal so that CV module sends its latest inference
-  Serial.println("[OM_CV_REQUEST]");
+  //Serial.println("[OM_CV_REQUEST]");
   
   // 3. Gather sensor data
 
@@ -642,5 +642,5 @@ void loop() {
   Serial.println(F(" ms"));
   
   delay(100);
+  }
 }
-
