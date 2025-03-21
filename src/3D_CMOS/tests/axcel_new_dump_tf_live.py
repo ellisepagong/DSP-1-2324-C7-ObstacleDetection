@@ -5,6 +5,8 @@ import time
 import tensorflow as tf
 import sys
 import os
+import serial
+import csv
 
 # ----------------------------
 # Object detection parameters and classes dictionary
@@ -116,7 +118,7 @@ def display_candidates(img, candidate_groupB, candidate_groupA):
             cv2.putText(img, text, (int(box[0]), int(box[1]) - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-def send_to_console(candidate_groupB, candidate_groupA, inference_time):
+def send_to_console(candidate_groupB, candidate_groupA, inference_time, total_duration):
     """
     Clears the console and prints the final output in the required format.
     The non-special (group B) candidate output is formatted as: "segment depth class"
@@ -125,8 +127,7 @@ def send_to_console(candidate_groupB, candidate_groupA, inference_time):
     Then the final output is a concatenation:
       <groupB_triplet> <groupA_triplet>
     """
-    os.system('cls' if os.name == 'nt' else 'clear')
-    
+    # os.system('cls' if os.name == 'nt' else 'clear')
     if candidate_groupB is not None:
         out_groupB = f"{candidate_groupB['segment']} {candidate_groupB['depth']} {candidate_groupB['class']}"
     else:
@@ -138,10 +139,11 @@ def send_to_console(candidate_groupB, candidate_groupA, inference_time):
         out_groupA = "-1 -1 -1"
     
     final_output = out_groupB + " " + out_groupA
-    print("================ LIVE DATA ================")
-    print(f"Inference time: {inference_time:.3f} seconds")
-    print(f"Output Values (CV): {final_output}")
+    print(f"[CV] Inference time: {inference_time:.3f} seconds")
+    print(f"[CV] Total process duration: {total_duration:.3f} seconds")
+    print(f"[CV] Output Values: {final_output}")
     sys.stdout.flush()
+    return final_output
 
 def create_pipeline():
     """
@@ -191,13 +193,28 @@ def create_pipeline():
 # ----------------------------
 def main():
     pipeline, stereo = create_pipeline()
+    
+    # Initialize serial connection to Arduino (adjust COM port as needed)
+    try:
+        COM_PORT = 'COM7'   # Adjust to your Arduino's COM port (e.g., COM7)
+        BAUD_RATE = 9600    # Must match your Arduino's Serial.begin() setting
+        ser = serial.Serial(COM_PORT, BAUD_RATE, timeout=1)
+        time.sleep(5)  # Wait for Arduino to reset (common on connect)
+        print(f"[CV] Connected to Arduino on {COM_PORT} at {BAUD_RATE} baud.")
+    except serial.SerialException as e:
+        print(f"[CV] Failed to connect to Arduino: {e}")
+        ser = None
+
+
+    # Open CSV file to log performance metrics
+    csv_filename = "CV_performance metrics.csv"
+    csv_file = open(csv_filename, mode='w', newline='')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(["Inference_Time", "Total_Duration"])
+    
     with dai.Device(pipeline) as device:
         queueColor = device.getOutputQueue(name="color", maxSize=1, blocking=True)
         queueDepth = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
-        
-        # For visualization: get multiplier if needed from max disparity.
-        max_disp = stereo.initialConfig.getMaxDisparity()
-        multiplier = 255.0 / max_disp
         
         # TensorFlow Lite Interpreter for object detection
         interpreter = tf.lite.Interpreter(model_path=r"D:\Career\IDS\DSP-1-2324-C7-ObstacleDetection\src\3D_CMOS\tests\model_float16_480x480.tflite")
@@ -299,9 +316,33 @@ def main():
             # Draw candidate detections on the display frame.
             display_candidates(rgbFrame_disp, candidate_groupB, candidate_groupA)
             
-            # Print the output message and additional info to the console.
-            send_to_console(candidate_groupB, candidate_groupA, inference_time)
+            # Calculate total duration from start of inference to now (after processing)
+            total_duration = time.time() - start_inference
             
+            # Print the output message and additional info to the console.
+            output_str = send_to_console(candidate_groupB, candidate_groupA, inference_time, total_duration)
+
+            # Send the final output string to Arduino over USB, if connected
+            if ser is not None:
+                try:
+                    ser.write((output_str + "\n").encode())
+                except Exception as e:
+                    print(f"[CV] Error sending data to Arduino: {e}")
+
+            # Log the performance metrics (inference time and total duration) to the CSV file
+            csv_writer.writerow([f"{inference_time:.3f}", f"{total_duration:.3f}"])
+            csv_file.flush()
+            
+            # Read and output any data received from Arduino
+            if ser is not None:
+                try:
+                    if ser.in_waiting > 0:
+                        line = ser.readline().decode('utf-8', errors='replace').strip()
+                        print(f"[Arduino] {line}")
+                except Exception as e:
+                    print(f"[CV] Error reading from Arduino: {e}")
+
+
             fps_text = f"Live FPS: {live_fps:.2f} | Inference FPS: {1.0/inference_time:.2f}"
             cv2.putText(rgbFrame_disp, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
             
@@ -316,6 +357,7 @@ def main():
                 print("[CV] Exiting main loop.")
                 break
         
+        csv_file.close()
         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
