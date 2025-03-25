@@ -6,6 +6,7 @@ from tflite_runtime.interpreter import Interpreter
 import serial
 import csv
 import re
+import os
 from picamera2 import Picamera2
 
 # Establish USB connection with Arduino (OUTPUT module)
@@ -95,6 +96,14 @@ def display_pred(img, largest_boxes):
             rect_end = (int(x1) + text_width, int(y1))
             cv2.rectangle(img, rect_start, rect_end, (255, 50, 50), -1)
             cv2.putText(img, text, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+def save_inference_frame(frame, count):
+    folder = os.path.join("INFERENCES_TEST", "live_camera")
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    filename = os.path.join(folder, f"inference_{count:05d}.jpg")
+    cv2.imwrite(filename, frame)
+    print(f"[CV] Saved inference frame: {filename}")
 
 def assign_segment(x1, x2):
 
@@ -112,7 +121,7 @@ def preprocess_input(image, input_size):
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
 
-def process_detections(output_data, input_shape, conf_threshold=0.41, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.21, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     detections = []
@@ -135,8 +144,6 @@ def process_detections(output_data, input_shape, conf_threshold=0.41, iou_thresh
     return detections
 
 # --- Live Camera Capture Thread ---
-
-
 def live_camera_picamera2():
     global latest_frame, running
     # Initialize Picamera2
@@ -184,7 +191,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         cv_inference_time = (inference_end - inference_start) * 1000  # ms
         
         output_data = interpreter.get_tensor(output_details[0]['index'])
-        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.5, iou_threshold=0.5)
+        detections = process_detections(output_data, (input_size, input_size, 3), conf_threshold=0.21, iou_threshold=0.5)
         
         scale_x = display_width / input_size
         scale_y = display_height / input_size
@@ -202,6 +209,8 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
                 largest_areas[seg] = area
                 largest_boxes[seg] = ((x1_disp, y1_disp, x2_disp, y2_disp), score, class_id)
         
+        display_pred(frame_disp, largest_boxes)  # Annotate frame
+        save_inference_frame(frame_disp, inference_count)  # Save annotated frame
         send_to_arduino(largest_boxes)
         cv_request = False
         
