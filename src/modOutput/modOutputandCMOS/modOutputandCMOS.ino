@@ -568,12 +568,13 @@ void loop() {
         char temp[10];
         sprintf(temp, "%d", dis[i]);
         strcat(distString, temp);
-        if (i < 6) {
+        if (i < 2) {
           strcat(distString, ",");
         }
       }
       message += ",";
       message += distString;
+      message += "\n";
 
       Serial2.println(message);
       Serial.print(F("[OUTPUT LOG] [HC-05] Sent message: "));
