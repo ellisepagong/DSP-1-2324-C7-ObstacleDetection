@@ -12,25 +12,24 @@ from picamera2 import Picamera2
 arduino = serial.Serial(port='/dev/ttyUSB0', baudrate=9600, timeout=1)
 time.sleep(3)  # Wait 3 seconds for Arduino to reset
 
+
 # Class dictionary (must match your model’s class order)
 classes_dict = {
     0: 'animal',
-    1: 'barrier',
-    2: 'bike',
-    3: 'crosswalk',
-    4: 'hazard-sign',
-    5: 'person',
-    6: 'pole',
-    7: 'stairs',
-    8: 'stall',
-    9: 'vehicle'
+    1: 'bike',
+    2: 'crosswalk',
+    3: 'hazard-sign',
+    4: 'person',
+    5: 'stairs',
+    6: 'vehicle'
 }
+
 
 # Display configuration
 display_width = 720  
 display_height = 720
 max_width = 720  
-seg_size = max_width / 5
+seg_size = max_width / 7
 
 # Global variables for sharing the latest video frame
 latest_frame = None
@@ -48,10 +47,12 @@ arduino_csv_writer = csv.writer(arduino_timing_log)
 arduino_csv_writer.writerow(["Timestamp", "Timing_Line"])
 
 def handshake_with_output():
+
     print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
     return True
 
 def read_from_output():
+
     with open("arduino_log.txt", "a") as log_file:
         while True:
             if arduino.in_waiting:
@@ -60,6 +61,7 @@ def read_from_output():
                     print("[OUTPUT LOG]", line)
                     log_file.write(line + "\n")
                     log_file.flush()
+
                     if line == "[OM_CV_REQUEST]":
                         global cv_request
                         cv_request = True
@@ -67,13 +69,16 @@ def read_from_output():
                         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                         arduino_csv_writer.writerow([timestamp, line])
                         arduino_timing_log.flush()
+
             time.sleep(0.1)
 
 def send_to_arduino(largest_boxes):
+    # Build a list of class IDs (or -1 for missing detections)
     classes_message = [
         int(data[2]) if data is not None else -1
         for data in largest_boxes.values()
     ]
+
     message = " ".join(map(str, classes_message)) + "\n"
     arduino.write(message.encode())
     print("[CV] Sent to OUTPUT:", message.strip())
@@ -92,6 +97,7 @@ def display_pred(img, largest_boxes):
             cv2.putText(img, text, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
 def assign_segment(x1, x2):
+
     x = ((x2 - x1) / 2) + x1
     segment_index = int(x // seg_size)
     if segment_index < 0:
@@ -106,7 +112,7 @@ def preprocess_input(image, input_size):
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
 
-def process_detections(output_data, input_shape, conf_threshold=0.23, iou_threshold=0.5):
+def process_detections(output_data, input_shape, conf_threshold=0.41, iou_threshold=0.5):
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     detections = []
@@ -182,8 +188,8 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         
         scale_x = display_width / input_size
         scale_y = display_height / input_size
-        largest_boxes = {i: None for i in range(5)}
-        largest_areas = {i: 0 for i in range(5)}
+        largest_boxes = {i: None for i in range(7)}
+        largest_areas = {i: 0 for i in range(7)}
         for detection in detections:
             class_id, score, x1, y1, x2, y2 = detection
             x1_disp = x1 * scale_x
@@ -191,8 +197,6 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
             x2_disp = x2 * scale_x
             y2_disp = y2 * scale_y
             area = (x2_disp - x1_disp) * (y2_disp - y1_disp)
-            if classes_dict[int(class_id)] == "pole":
-                area *= 0.3
             seg = assign_segment(x1_disp, x2_disp)
             if area > largest_areas[seg]:
                 largest_areas[seg] = area
@@ -214,7 +218,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
 def main():
     global running, latest_frame
     print("[CV] Loading TFLite model...")
-    interpreter = Interpreter(model_path="model_float16_480x480.tflite")
+    interpreter = Interpreter(model_path="revised_model_float16_480x480.tflite")
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -246,6 +250,7 @@ def main():
     performance_log.close()
     arduino_timing_log.close()
     print("[CV] Live camera processing finished. Performance log saved.")
+
 
 if __name__ == '__main__':
     main()
