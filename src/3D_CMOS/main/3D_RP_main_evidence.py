@@ -183,17 +183,11 @@ def main():
     metrics_dir = script_dir / "performance_metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create (or clear) a folder named "inferences" inside performance_metrics
+    # Create a folder named "inferences" inside performance_metrics if it does not exist
     inferences_dir = metrics_dir / "inferences"
-    if inferences_dir.exists():
-        # Delete all files and folders inside "inferences"
-        for item in inferences_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-            else:
-                shutil.rmtree(item)
-    else:
+    if not inferences_dir.exists():
         inferences_dir.mkdir()
+
 
     # Create and open the CV performance metrics CSV file for writing
     csv_filename = metrics_dir / "CV_performance metrics.csv"
