@@ -77,7 +77,10 @@ const int weights[] = {
   1, // hazard-sign
   3, // person
   4, // stairs
-  5  // vehicle
+  5,  // vehicle
+  1, //stall
+  2, //barrier
+  1, //pole
 };
 
 bool handshakeComplete = false;
@@ -552,16 +555,16 @@ void loop() {
       // --- Bluetooth send timing ---
       unsigned long btStart = millis();
       char scoresString[50] = "";
-      for (int i = 0; i < 7; i++) {
-        char temp[10];
-        sprintf(temp, "%d", scores[i]);
-        strcat(scoresString, temp);
-        if (i < 6) {
-          strcat(scoresString, ",");
-        }
-      }
-      message += ",";
-      message += scoresString;
+      // for (int i = 0; i < 7; i++) {
+      //   char temp[10];
+      //   sprintf(temp, "%d", scores[i]);
+      //   strcat(scoresString, temp);
+      //   if (i < 6) {
+      //     strcat(scoresString, ",");
+      //   }
+      // }
+      // message += ",";
+      // message += scoresString;
 
       char distString[50] = "";
       for (int i = 0; i < 3; i++) {
