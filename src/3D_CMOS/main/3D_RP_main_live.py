@@ -18,14 +18,16 @@ timing_regex = re.compile(r'\[(MOTOR_ACTIVATION|CV_TO_BT|OVERALL)\]\s+(\d+)\s*ms
 # ----------------------------
 classes_dict = {
     0: 'animal',
-    1: 'bike',
-    2: 'crosswalk',
-    3: 'hazard-sign',
-    4: 'person',
-    5: 'stairs',
-    6: 'vehicle'
+    1: 'barrier',
+    2: 'bike',
+    3: 'crosswalk',
+    4: 'hazard-sign',
+    5: 'person',
+    6: 'pole',
+    7: 'stairs',
+    8: 'stall',
+    9: 'vehicle'
 }
-
 # Define which classes are considered "special"
 SPECIAL_CLASSES = {2, 3, 7, 9}
 
@@ -101,7 +103,7 @@ def display_candidates(img, candidate_groupB, candidate_groupA):
 
 def send_to_console(candidate_groupB, candidate_groupA, inference_time, total_duration):
     if candidate_groupB is not None:
-        out_groupB = f"{candidate_groupB['segment']}, {candidate_groupB['depth']}, {candidate_groupB['class']}"
+        out_groupB = f"{candidate_groupB['class']}, {candidate_groupB['depth']}, {candidate_groupB['segment']}"
     else:
         out_groupB = "-1, -1, -1"
         
@@ -109,6 +111,7 @@ def send_to_console(candidate_groupB, candidate_groupA, inference_time, total_du
         out_groupA = f"{candidate_groupA['class']}, {candidate_groupA['depth']}, {candidate_groupA['segment']}"
     else:
         out_groupA = "-1, -1, -1"
+        
     
     final_output = out_groupB + ", " + out_groupA
     print(f"[CV] Inference time: {inference_time * 1000:.2f} ms")
@@ -199,7 +202,7 @@ def main():
         queueDepth = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
         
         # Update the model path to a relative path (place your .tflite file in the same folder or adjust as needed)
-        interpreter = tf.lite.Interpreter(model_path="revised_model_float16_480x480.tflite")
+        interpreter = tf.lite.Interpreter(model_path="model_float16_480x480.tflite")
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
@@ -280,11 +283,11 @@ def main():
             scale_x = DISPLAY_WIDTH / input_size
             scale_y = DISPLAY_HEIGHT / input_size
             
-            candidate_groupA = None  # Special candidate
-            candidate_groupB = None  # Non-special candidate
-            
+            # First pass: get the overall closest detection (candidate_groupB)
+            candidate_groupB = None
             for detection in detections:
                 class_id, score, x1, y1, x2, y2 = detection
+                # Compute display coordinates and center point
                 x1_disp = x1 * scale_x
                 y1_disp = y1 * scale_y
                 x2_disp = x2 * scale_x
@@ -294,30 +297,54 @@ def main():
                 depth_val = get_depth_at_point(depthFrame, x_center, y_center)
                 if depth_val == 0:
                     continue
-                segment = int(x_center // SEG_SIZE)
                 candidate = {
                     'class': class_id,
                     'score': score,
                     'depth': depth_val,
-                    'segment': segment,
+                    'segment': int(x_center // SEG_SIZE),
                     'box': (x1_disp, y1_disp, x2_disp, y2_disp)
                 }
-                if class_id in SPECIAL_CLASSES:
-                    if candidate_groupA is None or depth_val < candidate_groupA['depth']:
-                        candidate_groupA = candidate
-                else:
-                    if candidate_groupB is None or depth_val < candidate_groupB['depth']:
-                        candidate_groupB = candidate
+                if candidate_groupB is None or depth_val < candidate_groupB['depth']:
+                    candidate_groupB = candidate
+
+            # Second pass: get the closest detection among SPECIAL_CLASSES (candidate_groupA)
+            candidate_groupA = None
+            for detection in detections:
+                class_id, score, x1, y1, x2, y2 = detection
+                # Compute display coordinates and center point
+                x1_disp = x1 * scale_x
+                y1_disp = y1 * scale_y
+                x2_disp = x2 * scale_x
+                y2_disp = y2 * scale_y
+                x_center = (x1_disp + x2_disp) / 2
+                y_center = (y1_disp + y2_disp) / 2
+                depth_val = get_depth_at_point(depthFrame, x_center, y_center)
+                if depth_val == 0:
+                    continue
+                if class_id not in SPECIAL_CLASSES:
+                    continue
+                candidate = {
+                    'class': class_id,
+                    'score': score,
+                    'depth': depth_val,
+                    'segment': int(x_center // SEG_SIZE),
+                    'box': (x1_disp, y1_disp, x2_disp, y2_disp)
+                }
+                # If candidate_groupB is also special and matches this candidate, skip it
+                if candidate_groupB is not None and candidate_groupB['class'] == candidate['class']:
+                    continue
+                if candidate_groupA is None or depth_val < candidate_groupA['depth']:
+                    candidate_groupA = candidate
             
             if candidate_groupB is not None:
-                out_groupB = f"{candidate_groupB['segment']}, {candidate_groupB['depth']}, {candidate_groupB['class']}"
+                out_groupB = f"{candidate_groupB['class']}, {candidate_groupB['depth']}, {candidate_groupB['segment']}"
             else:
                 out_groupB = "-1, -1, -1"
             if candidate_groupA is not None:
                 out_groupA = f"{candidate_groupA['class']}, {candidate_groupA['depth']}, {candidate_groupA['segment']}"
             else:
                 out_groupA = "-1, -1, -1"
-            final_output = out_groupB + ", " + out_groupA
+            final_output = out_groupB + ", " + out_groupA + "\n"
             
             display_candidates(rgbFrame_disp, candidate_groupB, candidate_groupA)
             
