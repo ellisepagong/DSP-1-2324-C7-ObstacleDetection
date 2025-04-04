@@ -29,7 +29,6 @@ classes_dict = {
 # Display configuration
 display_width = 720  
 display_height = 720
-
 max_width = 720  
 seg_size = max_width / 5
 
@@ -171,16 +170,13 @@ def video_playback(video_file):
             break
         with frame_lock:
             latest_frame = frame.copy()
-
         # Display the video frame
-
         cv2.imshow("Video", frame)
         if cv2.waitKey(int(delay * 1000)) == 27:
             running = False
             break
     cap.release()
     cv2.destroyWindow("Video")  
-
 
 
 # --- CV Inference Thread ---
@@ -192,7 +188,6 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         if not cv_request:
             time.sleep(0.01)
             continue
-        
 
         # Get the latest frame if available
         with frame_lock:
@@ -296,7 +291,6 @@ def main():
         # Destroy any OpenCV windows before moving on
         cv2.destroyAllWindows();
         time.sleep(0.1);  # Optional: a small delay to ensure cleanup
-
     
     cv2.destroyAllWindows()
     performance_log.close()
