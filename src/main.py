@@ -73,6 +73,47 @@ def read_from_output():
 
             time.sleep(0.1)
 
+# Global variables for sharing the latest video frame
+latest_frame = None
+frame_lock = threading.Lock()
+running = True  # Used to signal threads to stop
+cv_request = False  # New flag to trigger one inference on request
+
+# Open CSV files for logging
+performance_log = open("performance_log.csv", "w", newline="")
+csv_writer = csv.writer(performance_log)
+csv_writer.writerow(["Video", "Inference_Count", "Timestamp", "CV_Inference_Time_ms", "Total_Processing_Time_ms", "Avg_FPS"])
+
+arduino_timing_log = open("arduino_timing.csv", "w", newline="")
+arduino_csv_writer = csv.writer(arduino_timing_log)
+arduino_csv_writer.writerow(["Timestamp", "Timing_Line"])
+
+def handshake_with_output():
+
+    print("[CV][HANDSHAKE] Skipping handshake, continuous stream mode enabled.")
+    return True
+
+def read_from_output():
+
+    with open("arduino_log.txt", "a") as log_file:
+        while True:
+            if arduino.in_waiting:
+                line = arduino.readline().decode('utf-8', errors='replace').strip()
+                if line:
+                    print("[OUTPUT LOG]", line)
+                    log_file.write(line + "\n")
+                    log_file.flush()
+
+                    if line == "[OM_CV_REQUEST]":
+                        global cv_request
+                        cv_request = True
+                    if "[TIMING]" in line:
+                        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                        arduino_csv_writer.writerow([timestamp, line])
+                        arduino_timing_log.flush()
+
+            time.sleep(0.1)
+
 def send_to_arduino(largest_boxes):
     # Build a list of class IDs (or -1 for missing detections)
     classes_message = [
@@ -105,6 +146,7 @@ def save_inference_frame(frame, count):
     cv2.imwrite(filename, frame)
     print(f"[CV] Saved inference frame: {filename}")
 
+
 def assign_segment(x1, x2):
 
     x = ((x2 - x1) / 2) + x1
@@ -121,7 +163,9 @@ def preprocess_input(image, input_size):
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
 
+
 def process_detections(output_data, input_shape, conf_threshold=0.21, iou_threshold=0.5):
+
     output_data = np.squeeze(output_data)
     output_data = np.transpose(output_data)
     detections = []
@@ -228,6 +272,7 @@ def main():
     global running, latest_frame
     print("[CV] Loading TFLite model...")
     interpreter = Interpreter(model_path="revised_model_float16_480x480.tflite")
+
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()

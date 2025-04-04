@@ -81,6 +81,7 @@ const int weights[] = {
   1, //stall
   2, //barrier
   1, //pole
+
 };
 
 bool handshakeComplete = false;
@@ -225,11 +226,13 @@ void motorLogic(int segment) {
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 2:
+
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], HIGH);
       digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], LOW);
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
       break;
     case 3:
+
       digitalWrite(motorPins[0], LOW); digitalWrite(motorPins[1], LOW);
       digitalWrite(motorPins[2], HIGH); digitalWrite(motorPins[3], HIGH);
       digitalWrite(motorPins[4], LOW); digitalWrite(motorPins[5], LOW);
@@ -258,6 +261,7 @@ void motorLogic(int segment) {
 }
 
 // Check if all scores are zero
+
 int areAllScoresZero(int scores[7]) {
   for (int i = 0; i < 7; i++) {
     if (scores[i] != 0) return 0;
@@ -499,6 +503,7 @@ void loop() {
 
     // Build a comma-separated string from the parsed classes
     String formattedCVData = "";
+
     for (int i = 0; i < 7; i++) {
       formattedCVData += String(classes[i]);
       if (i < 6) {
@@ -648,3 +653,4 @@ void loop() {
   delay(100);
   }
 }
+

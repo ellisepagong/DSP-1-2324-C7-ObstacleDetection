@@ -38,6 +38,7 @@ frame_lock = threading.Lock()
 running = True  # Used to signal threads to stop
 cv_request = False # New flag to trigger one inference on request
 
+
 # Open CSV file for performance logging (for inference metrics)
 performance_log = open("performance_log.csv", "w", newline="")
 csv_writer = csv.writer(performance_log)
@@ -65,6 +66,7 @@ def read_from_output():
                     if line == "[OM_CV_REQUEST]":
                         global cv_request
                         cv_request = True
+
                     if "[TIMING]" in line:
                         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                         # Write the whole timing line to the CSV
@@ -109,6 +111,7 @@ def preprocess_input(image, input_size):
     normalized_img = resized_img / 255.0
     input_tensor = np.expand_dims(normalized_img, axis=0).astype(np.float32)
     return input_tensor
+
 
 # def non_max_suppression(detections, iou_threshold):
 #     if len(detections) == 0:
@@ -185,7 +188,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         if not cv_request:
             time.sleep(0.01)
             continue
-        
+
         # Get the latest frame if available
         with frame_lock:
             if latest_frame is None:
@@ -229,6 +232,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         send_to_arduino(largest_boxes)
         cv_request = False  # Reset flag so only one inference is processed per request
 
+
         # Log performance metrics
         current_time = time.time()
         elapsed = current_time - sim_start_time
@@ -238,6 +242,7 @@ def cv_inference_worker(interpreter, input_details, output_details, input_size, 
         csv_writer.writerow([video_file, inference_count, timestamp, f"{cv_inference_time:.2f}", f"{total_processing_time:.2f}", f"{avg_fps:.2f}"])
         performance_log.flush()
         print(f"[CV] Total processing duration: {total_processing_time:.2f} ms, Avg FPS: {avg_fps:.2f}")
+
         # Yield briefly so the thread doesn't hog the CPU
         time.sleep(0.001)
 
@@ -246,6 +251,7 @@ def main():
     # Initialize TFLite model
     print("[CV] Loading TFLite model...")
     interpreter = Interpreter(model_path="model_float16_480x480.tflite")
+
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
